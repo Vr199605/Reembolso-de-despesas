@@ -55,7 +55,7 @@ def enviar_email_automatico(dados, arquivo_pdf, arquivo_comprovante):
             part_comp['Content-Disposition'] = f'attachment; filename="COMPROVANTE_{os.path.basename(arquivo_comprovante)}"'
             msg.attach(part_comp)
 
-        # LOGICA DE ENVIO REAL (O que faltava)
+        # LOGICA DE ENVIO REAL
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
         server.login(remetente, senha)
@@ -69,14 +69,12 @@ def enviar_email_automatico(dados, arquivo_pdf, arquivo_comprovante):
 def salvar_arquivo_local(file):
     if not os.path.exists("comprovantes"): 
         os.makedirs("comprovantes")
-    # Limpar nome do arquivo para evitar erros de path
     safe_filename = "".join([c for c in file.name if c.isalnum() or c in ('.','_')]).strip()
     path = os.path.join("comprovantes", safe_filename)
     with open(path, "wb") as f: 
         f.write(file.getbuffer())
     return path
 
-# (Mantenha a função gerar_relatorio_pdf como está, ela está correta)
 def gerar_relatorio_pdf(dados, nome_arquivo):
     doc = SimpleDocTemplate(nome_arquivo, pagesize=letter)
     styles = getSampleStyleSheet()
@@ -97,8 +95,9 @@ def gerar_relatorio_pdf(dados, nome_arquivo):
     elements.append(Spacer(1, 20))
 
     data_despesas = [["Categoria", "Valor", "Motivo"]]
-    for cat, det in dados['Detalhes'].items():
-        data_despesas.append([cat, f"R$ {det['valor']:.2f}", det['motivo']])
+    # Alterado para iterar sobre lista de dicionários para suportar duplicatas
+    for item in dados['Detalhes']:
+        data_despesas.append([item['categoria'], f"R$ {item['valor']:.2f}", item['motivo']])
 
     t_despesas = Table(data_despesas, colWidths=[150, 100, 250])
     t_despesas.setStyle(TableStyle([
@@ -115,52 +114,66 @@ LIMITES = {"REFEIÇÃO VIAGEM (em R$)": 100.0, "REPRESENTAÇÃO (em R$)": 100.0,
 CATEGORIAS = ["ESTACIONAMENTO (em R$)", "PEDÁGIO (em R$)", "KM¹ (em qtde)", "KM² (em R$)", "REPRESENTAÇÃO (em R$)", "TAXI / UBER (em R$)", "REFEIÇÃO VIAGEM (em R$)", "OUTROS* (em R$)"]
 
 if 'db' not in st.session_state: st.session_state.db = []
+if 'items_reembolso' not in st.session_state: st.session_state.items_reembolso = [{"categoria": CATEGORIAS[0], "valor": 0.0, "motivo": ""}]
 
 aba_colab, aba_christian = st.tabs(["🚀 Solicitar Reembolso", "⚖️ Portal de Aprovação"])
 
 with aba_colab:
     st.header("Nova Solicitação")
     nome = st.text_input("Nome Completo")
-    data_solic = st.date_input("Data da Despesa")
-    selecionadas = st.multiselect("Categorias", CATEGORIAS)
+    data_solic = st.date_input("Data da Despesa", format="DD/MM/YYYY")
     
-    detalhes_form = {}
-    for cat in selecionadas:
-        c_v, c_m = st.columns([1, 2])
-        v = c_v.number_input(f"Valor {cat}", step=0.01, key=f"v_{cat}")
-        m = c_m.text_input(f"Motivo {cat}", key=f"m_{cat}")
-        detalhes_form[cat] = {"valor": v, "motivo": m}
-    
+    st.markdown("### Itens de Despesa")
+    for i, item in enumerate(st.session_state.items_reembolso):
+        col1, col2, col3, col4 = st.columns([2, 1, 2, 0.5])
+        item['categoria'] = col1.selectbox(f"Categoria {i+1}", CATEGORIAS, key=f"cat_{i}")
+        item['valor'] = col2.number_input(f"Valor {i+1}", step=0.01, key=f"val_{i}")
+        item['motivo'] = col3.text_input(f"Motivo {i+1}", key=f"mot_{i}")
+        if col4.button("🗑️", key=f"del_{i}"):
+            st.session_state.items_reembolso.pop(i)
+            st.rerun()
+
+    if st.button("➕ Adicionar Outra Categoria"):
+        st.session_state.items_reembolso.append({"categoria": CATEGORIAS[0], "valor": 0.0, "motivo": ""})
+        st.rerun()
+
     arquivo = st.file_uploader("Comprovante", type=['pdf', 'png', 'jpg'])
     
     if st.button("Enviar Solicitação"):
-        if nome and arquivo and detalhes_form:
+        if nome and arquivo and any(it['valor'] > 0 for it in st.session_state.items_reembolso):
             path = salvar_arquivo_local(arquivo)
+            # Formatação da data para PT-BR
+            data_br = data_solic.strftime("%d/%m/%Y")
+            
             st.session_state.db.append({
                 "id": len(st.session_state.db) + 1,
                 "Colaborador": nome,
-                "Data": str(data_solic),
-                "Detalhes": detalhes_form,
+                "Data": data_br,
+                "Detalhes": st.session_state.items_reembolso.copy(),
                 "Status": "Pendente",
                 "CaminhoArquivo": path
             })
-            st.success("Solicitação registrada!")
+            st.session_state.items_reembolso = [{"categoria": CATEGORIAS[0], "valor": 0.0, "motivo": ""}]
+            st.success("Solicitação registrada com sucesso!")
         else:
-            st.error("Preencha tudo!")
+            st.error("Preencha todos os campos obrigatórios.")
 
 with aba_christian:
     st.header("Painel Christian")
     pendentes = [s for s in st.session_state.db if s['Status'] == "Pendente"]
     
     for solic in pendentes:
-        with st.expander(f"Solicitação #{solic['id']} - {solic['Colaborador']}"):
+        with st.expander(f"Solicitação #{solic['id']} - {solic['Colaborador']} ({solic['Data']})"):
+            st.write("**Resumo das Despesas:**")
+            df_resumo = pd.DataFrame(solic['Detalhes'])
+            st.table(df_resumo)
+            
             decisao = st.radio("Decisão", ["Aprovado", "Reprovado"], key=f"d_{solic['id']}")
             motivo = st.text_area("Comentário", key=f"c_{solic['id']}")
             
             if st.button("Confirmar", key=f"b_{solic['id']}"):
                 solic['Status'] = decisao
                 solic['Comentario'] = motivo
-                
                 nome_pdf = f"Relatorio_ID_{solic['id']}.pdf"
                 gerar_relatorio_pdf(solic, nome_pdf)
                 
