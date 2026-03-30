@@ -164,7 +164,7 @@ with aba_colab:
 with aba_christian:
     st.header("Portal de Aprovação - Christian Wellisch")
     senha_ch = st.text_input("Senha de Acesso (Christian)", type="password")
-    if senha_ch == "christian2026":
+    if senha_ch == "maldivas2026":
         pendentes = [s for s in st.session_state.db if s['Status'] == "Pendente"]
         for solic in pendentes:
             with st.expander(f"SOLICITAÇÃO #{solic['id']} - {solic['Colaborador']}"):
