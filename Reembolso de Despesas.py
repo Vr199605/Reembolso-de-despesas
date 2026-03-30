@@ -34,6 +34,11 @@ CATEGORIAS = [
 ]
 VALOR_KM = 1.37
 
+# --- FUNÇÕES DE AUXÍLIO ---
+def formatar_moeda(valor):
+    """Formata o valor numérico para o padrão R$ 0.000,00"""
+    return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
 # --- FUNÇÕES DE SISTEMA ---
 
 def enviar_email_automatico(dados, arquivo_pdf, arquivo_comprovante):
@@ -100,9 +105,9 @@ def gerar_relatorio_pdf(dados, nome_arquivo):
     despesas_data = [["CATEGORIA", "VALOR (R$)", "JUSTIFICATIVA / MOTIVO"]]
     total_geral = 0
     for item in dados['Detalhes']:
-        despesas_data.append([item['categoria'], f"{item['valor']:,.2f}", item['motivo']])
+        despesas_data.append([item['categoria'], formatar_moeda(item['valor']), item['motivo']])
         total_geral += item['valor']
-    despesas_data.append(["TOTAL A REEMBOLSAR", f"{total_geral:,.2f}", ""])
+    despesas_data.append(["TOTAL A REEMBOLSAR", formatar_moeda(total_geral), ""])
 
     t_desp = Table(despesas_data, colWidths=[2.2*inch, 1.2*inch, 3.1*inch])
     t_desp.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor("#1f4e79")), ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke), ('GRID', (0,0), (-1,-1), 0.5, colors.grey), ('FONTNAME', (0,-1), (-1,-1), 'Helvetica-Bold'), ('ALIGN', (1,1), (1,-1), 'RIGHT')]))
@@ -116,9 +121,9 @@ def gerar_relatorio_pdf(dados, nome_arquivo):
 
 # --- INTERFACE ---
 if 'db' not in st.session_state: st.session_state.db = []
-if 'items_reembolso' not in st.session_state: st.session_state.items_reembolso = [{"categoria": CATEGORIAS[0], "valor": 0.0, "motivo": ""}]
+if 'items_reembolso' not in st.session_state: st.session_state.items_reembolso = [{"categoria": CATEGORIAS[0], "valor": None, "motivo": ""}]
 
-aba_colab, aba_christian, aba_admin = st.tabs(["🚀 Solicitar Reembolso", "⚖️ Portal de Aprovação", "🔑 Admin (Gabriel)"])
+aba_colab, aba_admin, aba_christian = st.tabs(["🚀 Solicitar Reembolso", "🔑 Verificação (Gabriel)", "⚖️ Aprovação (Christian)"])
 
 with aba_colab:
     st.header("Nova Solicitação")
@@ -131,13 +136,14 @@ with aba_colab:
         item['categoria'] = col1.selectbox(f"Categoria {i+1}", CATEGORIAS, key=f"cat_{i}")
         
         if item['categoria'] == "KM¹ (em qtde)":
-            qtd_km = col2.number_input("Quantidade de KM", min_value=0, step=1, key=f"km_{i}")
-            item['valor'] = round(qtd_km * VALOR_KM, 2)
-            col2.markdown(f"<h3 style='color: #1f4e79; margin:0;'>R$ {item['valor']:.2f}</h3>", unsafe_allow_html=True)
+            qtd_km = col2.number_input("Quantidade de KM", min_value=0, step=1, value=None, key=f"km_{i}")
+            valor_calc = round((qtd_km if qtd_km else 0) * VALOR_KM, 2)
+            item['valor'] = valor_calc
+            col2.markdown(f"<h3 style='color: #1f4e79; margin:0;'>{formatar_moeda(valor_calc)}</h3>", unsafe_allow_html=True)
         else:
-            item['valor'] = col2.number_input(f"Valor R$", min_value=0.0, step=0.01, key=f"val_{i}")
-            if item['categoria'] in LIMITES and item['valor'] > LIMITES[item['categoria']]:
-                col2.warning(f"Limite: R${LIMITES[item['categoria']]}")
+            item['valor'] = col2.number_input(f"Valor R$", min_value=0.0, step=0.01, format="%.2f", value=None, key=f"val_{i}")
+            if item['valor'] and item['categoria'] in LIMITES and item['valor'] > LIMITES[item['categoria']]:
+                col2.warning(f"Limite: {formatar_moeda(LIMITES[item['categoria']])}")
         
         item['motivo'] = col3.text_input(f"Motivo / Justificativa", key=f"mot_{i}")
         if col4.button("🗑️", key=f"del_{i}"):
@@ -145,58 +151,86 @@ with aba_colab:
             st.rerun()
 
     if st.button("➕ Adicionar Outro Item"):
-        st.session_state.items_reembolso.append({"categoria": CATEGORIAS[0], "valor": 0.0, "motivo": ""})
+        st.session_state.items_reembolso.append({"categoria": CATEGORIAS[0], "valor": None, "motivo": ""})
         st.rerun()
 
     arquivo = st.file_uploader("Anexar Comprovante (Obrigatório)", type=['pdf', 'png', 'jpg'])
     
-    if st.button("Enviar para Aprovação"):
-        if nome and arquivo and any(it['valor'] > 0 for it in st.session_state.items_reembolso):
+    if st.button("Enviar para Verificação"):
+        if nome and arquivo and any(it['valor'] and it['valor'] > 0 for it in st.session_state.items_reembolso):
             path = salvar_arquivo_local(arquivo)
+            # Sanitização dos valores para o banco antes de salvar
+            detalhes_limpos = []
+            for it in st.session_state.items_reembolso:
+                it_copy = it.copy()
+                it_copy['valor'] = it_copy['valor'] if it_copy['valor'] else 0.0
+                detalhes_limpos.append(it_copy)
+
             st.session_state.db.append({
                 "id": len(st.session_state.db)+1, "Colaborador": nome, "Data": data_solic.strftime("%d/%m/%Y"), 
-                "Detalhes": st.session_state.items_reembolso.copy(), "Status": "Pendente", "CaminhoArquivo": path
+                "Detalhes": detalhes_limpos, "Status": "Em Verificação", "CaminhoArquivo": path
             })
-            st.session_state.items_reembolso = [{"categoria": CATEGORIAS[0], "valor": 0.0, "motivo": ""}]
-            st.success("Enviado com sucesso!")
+            st.session_state.items_reembolso = [{"categoria": CATEGORIAS[0], "valor": None, "motivo": ""}]
+            st.success("Enviado para o Gabriel Coelho verificar!")
+        else:
+            st.error("Preencha todos os campos obrigatórios e insira valores válidos.")
+
+with aba_admin:
+    st.header("Painel de Verificação - Gabriel Coelho")
+    senha_adm = st.text_input("Senha de Admin", type="password")
+    if senha_adm == "globus2026":
+        verificar = [s for s in st.session_state.db if s['Status'] in ["Em Verificação", "Pendente"]]
+        if not verificar:
+            st.info("Nenhuma solicitação para verificar no momento.")
+        for idx, solic in enumerate(verificar):
+            with st.expander(f"ID {solic['id']} - {solic['Colaborador']} (Status: {solic['Status']})"):
+                c_edit, c_view = st.columns([1.5, 1])
+                with c_edit:
+                    solic['Colaborador'] = st.text_input("Nome", solic['Colaborador'], key=f"adm_n_{idx}")
+                    for i_item, item in enumerate(solic['Detalhes']):
+                        ec1, ec2, ec3 = st.columns([2, 1.2, 2])
+                        item['categoria'] = ec1.selectbox(f"Cat {i_item+1}", CATEGORIAS, index=CATEGORIAS.index(item['categoria']), key=f"adm_cat_{idx}_{i_item}")
+                        item['valor'] = ec2.number_input(f"Valor", value=float(item['valor']), format="%.2f", key=f"adm_v_{idx}_{i_item}")
+                        item['motivo'] = ec3.text_input(f"Motivo", value=item['motivo'], key=f"adm_m_{idx}_{i_item}")
+                    
+                    col_b1, col_b2 = st.columns(2)
+                    if col_b1.button("Salvar Alterações", key=f"save_{idx}"): st.rerun()
+                    if solic['Status'] == "Em Verificação":
+                        if col_b2.button("🚀 ENVIAR PARA CHRISTIAN", key=f"send_ch_{idx}"):
+                            solic['Status'] = "Pendente"
+                            st.success("Enviado para o Christian!")
+                            st.rerun()
+                
+                with c_view:
+                    st.write("**Comprovante para Conferência:**")
+                    if solic['CaminhoArquivo'].lower().endswith('pdf'):
+                        with open(solic['CaminhoArquivo'], "rb") as f:
+                            b64 = base64.b64encode(f.read()).decode('utf-8')
+                            st.markdown(f'<iframe src="data:application/pdf;base64,{b64}" width="100%" height="400"></iframe>', unsafe_allow_html=True)
+                    else: st.image(solic['CaminhoArquivo'])
 
 with aba_christian:
     st.header("Portal de Aprovação - Christian Wellisch")
-    senha_ch = st.text_input("Senha de Acesso (Christian)", type="password")
-    if senha_ch == "maldivas2026":
+    senha_ch = st.text_input("Senha do Christian", type="password")
+    if senha_ch == "christian2026":
         pendentes = [s for s in st.session_state.db if s['Status'] == "Pendente"]
         if not pendentes:
-            st.info("Não há solicitações pendentes.")
+            st.info("Aguardando liberações do Gabriel Coelho.")
         for solic in pendentes:
             with st.expander(f"SOLICITAÇÃO #{solic['id']} - {solic['Colaborador']}"):
-                st.write("**Informações Detalhadas:**")
-                st.table(pd.DataFrame(solic['Detalhes']))
+                st.write("**Dados Verificados:**")
+                df_formatado = pd.DataFrame(solic['Detalhes'])
+                df_formatado['valor'] = df_formatado['valor'].apply(formatar_moeda)
+                st.table(df_formatado)
                 
                 decisao = st.radio("Decisão", ["Aprovado", "Reprovado"], key=f"d_{solic['id']}", horizontal=True)
-                motivo_rep = st.text_area("Justificativa / Comentário", key=f"c_{solic['id']}")
-                
-                if st.button("Confirmar e Enviar para Gabriel", key=f"b_{solic['id']}"):
+                motivo_rep = st.text_area("Justificativa", key=f"c_{solic['id']}")
+                if st.button("Finalizar Reembolso", key=f"b_{solic['id']}"):
                     solic['Status'] = decisao
                     solic['Comentario'] = motivo_rep
                     nome_pdf = f"Relatorio_ID_{solic['id']}.pdf"
                     gerar_relatorio_pdf(solic, nome_pdf)
                     if enviar_email_automatico(solic, nome_pdf, solic['CaminhoArquivo']):
-                        st.success("Finalizado! Enviado para Gabriel Coelho.")
+                        st.success("Finalizado e E-mail enviado!")
                         st.rerun()
-    elif senha_ch != "": st.error("Acesso Negado.")
-
-with aba_admin:
-    st.header("Painel Administrativo - Gabriel Coelho")
-    senha_adm = st.text_input("Senha de Acesso (Admin)", type="password")
-    if senha_adm == "globus2026":
-        for idx, solic in enumerate(st.session_state.db):
-            with st.expander(f"EDITAR ID {solic['id']} - {solic['Colaborador']}"):
-                c1, c2 = st.columns(2)
-                solic['Colaborador'] = c1.text_input("Nome", solic['Colaborador'], key=f"adm_n_{idx}")
-                solic['Status'] = c2.selectbox("Status", ["Pendente", "Aprovado", "Reprovado"], index=["Pendente", "Aprovado", "Reprovado"].index(solic['Status']), key=f"adm_s_{idx}")
-                for i_item, item in enumerate(solic['Detalhes']):
-                    ec1, ec2, ec3 = st.columns([2, 1, 2])
-                    item['categoria'] = ec1.selectbox(f"Cat {i_item+1}", CATEGORIAS, index=CATEGORIAS.index(item['categoria']) if item['categoria'] in CATEGORIAS else 0, key=f"adm_cat_{idx}_{i_item}")
-                    item['valor'] = ec2.number_input(f"R$", value=float(item['valor']), key=f"adm_v_{idx}_{i_item}")
-                    item['motivo'] = ec3.text_input(f"Motivo", value=item['motivo'], key=f"adm_m_{idx}_{i_item}")
-                if st.button("Salvar Alterações", key=f"adm_btn_{idx}"): st.rerun()
+    elif senha_ch != "": st.error("Senha incorreta.")
