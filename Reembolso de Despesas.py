@@ -37,6 +37,7 @@ VALOR_KM = 1.37
 # --- FUNÇÕES DE AUXÍLIO ---
 def formatar_moeda(valor):
     """Formata o valor numérico para o padrão R$ 0.000,00"""
+    if valor is None: return "R$ 0,00"
     return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 # --- FUNÇÕES DE SISTEMA ---
@@ -159,7 +160,6 @@ with aba_colab:
     if st.button("Enviar para Verificação"):
         if nome and arquivo and any(it['valor'] and it['valor'] > 0 for it in st.session_state.items_reembolso):
             path = salvar_arquivo_local(arquivo)
-            # Sanitização dos valores para o banco antes de salvar
             detalhes_limpos = []
             for it in st.session_state.items_reembolso:
                 it_copy = it.copy()
@@ -173,7 +173,7 @@ with aba_colab:
             st.session_state.items_reembolso = [{"categoria": CATEGORIAS[0], "valor": None, "motivo": ""}]
             st.success("Enviado para o Gabriel Coelho verificar!")
         else:
-            st.error("Preencha todos os campos obrigatórios e insira valores válidos.")
+            st.error("Preencha todos os campos obrigatórios.")
 
 with aba_admin:
     st.header("Painel de Verificação - Gabriel Coelho")
@@ -203,11 +203,15 @@ with aba_admin:
                 
                 with c_view:
                     st.write("**Comprovante para Conferência:**")
-                    if solic['CaminhoArquivo'].lower().endswith('pdf'):
-                        with open(solic['CaminhoArquivo'], "rb") as f:
-                            b64 = base64.b64encode(f.read()).decode('utf-8')
-                            st.markdown(f'<iframe src="data:application/pdf;base64,{b64}" width="100%" height="400"></iframe>', unsafe_allow_html=True)
-                    else: st.image(solic['CaminhoArquivo'])
+                    # SUBSTITUÍDO O IFRAME POR BOTÃO DE DOWNLOAD PARA EVITAR BLOQUEIO DO NAVEGADOR
+                    with open(solic['CaminhoArquivo'], "rb") as f:
+                        st.download_button(
+                            label="📂 Baixar/Ver Comprovante",
+                            data=f,
+                            file_name=os.path.basename(solic['CaminhoArquivo']),
+                            key=f"dl_{idx}"
+                        )
+                    st.info("O navegador bloqueia a visualização direta. Clique no botão acima para abrir o arquivo com segurança.")
 
 with aba_christian:
     st.header("Portal de Aprovação - Christian Wellisch")
@@ -218,7 +222,7 @@ with aba_christian:
             st.info("Aguardando liberações do Gabriel Coelho.")
         for solic in pendentes:
             with st.expander(f"SOLICITAÇÃO #{solic['id']} - {solic['Colaborador']}"):
-                st.write("**Dados Verificados:**")
+                st.write("**Dados Verificados pelo Gabriel:**")
                 df_formatado = pd.DataFrame(solic['Detalhes'])
                 df_formatado['valor'] = df_formatado['valor'].apply(formatar_moeda)
                 st.table(df_formatado)
