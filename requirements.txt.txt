@@ -1,1 +1,0 @@
-streamlit pandas openpyxl altair streamlit-option-menu
