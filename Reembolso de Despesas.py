@@ -16,14 +16,13 @@ from datetime import datetime
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="Portal de Reembolso - Globus", layout="wide")
 
-# --- REGRAS DA POLÍTICA (Baseado no PDF) ---
+# --- REGRAS DA POLÍTICA ---
 LIMITES = {
-    "REFEIÇÃO VIAGEM (em R$)": 150.0,  # Limite atualizado [cite: 56, 65]
-    "ESTACIONAMENTO (em R$)": 70.0,   # Limite por visita [cite: 82]
-    "BEBIDA ALCOÓLICA (em R$)": 50.0   # Apenas em representação [cite: 58]
+    "REFEIÇÃO VIAGEM (em R$)": 150.0,
+    "ESTACIONAMENTO (em R$)": 70.0,
+    "BEBIDA ALCOÓLICA (em R$)": 50.0
 }
 
-# Categorias atualizadas (KM² removido)
 CATEGORIAS = [
     "ESTACIONAMENTO (em R$)", 
     "PEDÁGIO (em R$)", 
@@ -33,7 +32,7 @@ CATEGORIAS = [
     "REFEIÇÃO VIAGEM (em R$)", 
     "OUTROS* (em R$)"
 ]
-VALOR_KM = 1.37 # Fator de conversão automático [cite: 74, 75]
+VALOR_KM = 1.37
 
 # --- FUNÇÕES DE SISTEMA ---
 
@@ -166,28 +165,24 @@ with aba_christian:
     senha_ch = st.text_input("Senha de Acesso (Christian)", type="password")
     if senha_ch == "maldivas2026":
         pendentes = [s for s in st.session_state.db if s['Status'] == "Pendente"]
+        if not pendentes:
+            st.info("Não há solicitações pendentes.")
         for solic in pendentes:
             with st.expander(f"SOLICITAÇÃO #{solic['id']} - {solic['Colaborador']}"):
-                c_inf, c_img = st.columns([1, 1])
-                with c_inf:
-                    st.table(pd.DataFrame(solic['Detalhes']))
-                    decisao = st.radio("Decisão", ["Aprovado", "Reprovado"], key=f"d_{solic['id']}", horizontal=True)
-                    motivo_rep = st.text_area("Justificativa", key=f"c_{solic['id']}")
-                    if st.button("Confirmar e Enviar", key=f"b_{solic['id']}"):
-                        solic['Status'] = decisao
-                        solic['Comentario'] = motivo_rep
-                        nome_pdf = f"Relatorio_ID_{solic['id']}.pdf"
-                        gerar_relatorio_pdf(solic, nome_pdf)
-                        if enviar_email_automatico(solic, nome_pdf, solic['CaminhoArquivo']):
-                            st.success("Enviado para Gabriel Coelho.")
-                            st.rerun()
-                with c_img:
-                    st.write("**Comprovante:**")
-                    if solic['CaminhoArquivo'].lower().endswith('pdf'):
-                        with open(solic['CaminhoArquivo'], "rb") as f:
-                            b64 = base64.b64encode(f.read()).decode('utf-8')
-                            st.markdown(f'<iframe src="data:application/pdf;base64,{b64}" width="100%" height="400"></iframe>', unsafe_allow_html=True)
-                    else: st.image(solic['CaminhoArquivo'])
+                st.write("**Informações Detalhadas:**")
+                st.table(pd.DataFrame(solic['Detalhes']))
+                
+                decisao = st.radio("Decisão", ["Aprovado", "Reprovado"], key=f"d_{solic['id']}", horizontal=True)
+                motivo_rep = st.text_area("Justificativa / Comentário", key=f"c_{solic['id']}")
+                
+                if st.button("Confirmar e Enviar para Gabriel", key=f"b_{solic['id']}"):
+                    solic['Status'] = decisao
+                    solic['Comentario'] = motivo_rep
+                    nome_pdf = f"Relatorio_ID_{solic['id']}.pdf"
+                    gerar_relatorio_pdf(solic, nome_pdf)
+                    if enviar_email_automatico(solic, nome_pdf, solic['CaminhoArquivo']):
+                        st.success("Finalizado! Enviado para Gabriel Coelho.")
+                        st.rerun()
     elif senha_ch != "": st.error("Acesso Negado.")
 
 with aba_admin:
@@ -204,4 +199,4 @@ with aba_admin:
                     item['categoria'] = ec1.selectbox(f"Cat {i_item+1}", CATEGORIAS, index=CATEGORIAS.index(item['categoria']) if item['categoria'] in CATEGORIAS else 0, key=f"adm_cat_{idx}_{i_item}")
                     item['valor'] = ec2.number_input(f"R$", value=float(item['valor']), key=f"adm_v_{idx}_{i_item}")
                     item['motivo'] = ec3.text_input(f"Motivo", value=item['motivo'], key=f"adm_m_{idx}_{i_item}")
-                if st.button("Salvar", key=f"adm_btn_{idx}"): st.rerun()
+                if st.button("Salvar Alterações", key=f"adm_btn_{idx}"): st.rerun()
