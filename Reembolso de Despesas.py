@@ -142,7 +142,7 @@ with aba_christian:
 with aba_admin:
     st.header("Área Restrita - Gabriel Coelho")
     pw = st.text_input("Senha Admin", type="password")
-    if pw == "globus2024":
+    if pw == "globus2026":
         filtro = st.selectbox("Filtrar Colaborador", ["Todos"] + list(set(s['Colaborador'] for s in st.session_state.db)))
         dados_v = st.session_state.db if filtro == "Todos" else [s for s in st.session_state.db if s['Colaborador'] == filtro]
         
