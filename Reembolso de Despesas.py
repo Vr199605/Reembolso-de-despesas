@@ -212,7 +212,7 @@ with aba_admin:
 with aba_christian:
     st.header("Portal de Aprovação - Christian Wellisch")
     senha_ch = st.text_input("Senha do Christian", type="password")
-    if senha_ch == "christian2026":
+    if senha_ch == "maldivas2026":
         pendentes = [s for s in st.session_state.db if s['Status'] == "Pendente"]
         if not pendentes:
             st.info("Aguardando liberações do Gabriel Coelho.")
