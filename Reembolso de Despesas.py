@@ -36,11 +36,45 @@ VALOR_KM = 1.37
 
 # --- FUNÇÕES DE AUXÍLIO ---
 def formatar_moeda(valor):
-    """Formata o valor numérico para o padrão R$ 0.000,00"""
     if valor is None: return "R$ 0,00"
     return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 # --- FUNÇÕES DE SISTEMA ---
+
+def enviar_aviso_ao_christian(solicitacao):
+    """Envia e-mail para o Christian avisando que há algo para aprovar"""
+    destinatario = "christian.wellisch@globusseguros.com.br"
+    remetente = "victormoreiraicnv@gmail.com"
+    senha = "odym ioqm ybew ejnn"
+
+    msg = MIMEMultipart()
+    msg['From'] = remetente
+    msg['To'] = destinatario
+    msg['Subject'] = f"🔔 Pendente de Aprovação: Reembolso ID {solicitacao['id']} - {solicitacao['Colaborador']}"
+
+    corpo = f"""
+    Olá Christian Wellisch,
+    
+    O Gabriel Coelho acabou de verificar e liberar uma nova solicitação de reembolso para sua aprovação final.
+    
+    DETALHES:
+    - ID: {solicitacao['id']}
+    - Colaborador: {solicitacao['Colaborador']}
+    - Data da Despesa: {solicitacao['Data']}
+    
+    Por favor, acesse o Portal Globus para aprovar ou reprovar esta solicitação.
+    """
+    msg.attach(MIMEText(corpo, 'plain'))
+
+    try:
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(remetente, senha)
+        server.send_message(msg)
+        server.quit()
+        return True
+    except Exception as e:
+        return False
 
 def enviar_email_automatico(dados, arquivo_pdf, arquivo_comprovante):
     destinatario = "gabriel.coelho@globusseguros.com.br"
@@ -198,20 +232,17 @@ with aba_admin:
                     if solic['Status'] == "Em Verificação":
                         if col_b2.button("🚀 ENVIAR PARA CHRISTIAN", key=f"send_ch_{idx}"):
                             solic['Status'] = "Pendente"
-                            st.success("Enviado para o Christian!")
+                            if enviar_aviso_ao_christian(solic):
+                                st.success("Enviado! Christian recebeu um e-mail de aviso.")
+                            else:
+                                st.warning("Enviado para aba, mas houve erro no e-mail de aviso.")
                             st.rerun()
                 
                 with c_view:
                     st.write("**Comprovante para Conferência:**")
-                    # SUBSTITUÍDO O IFRAME POR BOTÃO DE DOWNLOAD PARA EVITAR BLOQUEIO DO NAVEGADOR
                     with open(solic['CaminhoArquivo'], "rb") as f:
-                        st.download_button(
-                            label="📂 Baixar/Ver Comprovante",
-                            data=f,
-                            file_name=os.path.basename(solic['CaminhoArquivo']),
-                            key=f"dl_{idx}"
-                        )
-                    st.info("O navegador bloqueia a visualização direta. Clique no botão acima para abrir o arquivo com segurança.")
+                        st.download_button(label="📂 Baixar/Ver Comprovante", data=f, file_name=os.path.basename(solic['CaminhoArquivo']), key=f"dl_{idx}")
+                    st.info("Visualização direta bloqueada. Use o botão acima.")
 
 with aba_christian:
     st.header("Portal de Aprovação - Christian Wellisch")
