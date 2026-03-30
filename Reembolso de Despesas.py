@@ -42,7 +42,7 @@ def formatar_moeda(valor):
 # --- FUNÇÕES DE SISTEMA ---
 
 def enviar_aviso_ao_christian(solicitacao):
-    """Envia e-mail para o Christian avisando que há algo para aprovar"""
+    """Envia e-mail para o Christian avisando que há algo para aprovar com o link do portal"""
     destinatario = "christian.wellisch@globusseguros.com.br"
     remetente = "victormoreiraicnv@gmail.com"
     senha = "odym ioqm ybew ejnn"
@@ -62,7 +62,9 @@ def enviar_aviso_ao_christian(solicitacao):
     - Colaborador: {solicitacao['Colaborador']}
     - Data da Despesa: {solicitacao['Data']}
     
-    Por favor, acesse o Portal Globus para aprovar ou reprovar esta solicitação.
+    Para aprovar ou reprovar, acesse o portal através do link abaixo:
+    https://reembolsodespesas.streamlit.app/
+    sua senha para acessar é: maldivas2026
     """
     msg.attach(MIMEText(corpo, 'plain'))
 
@@ -233,7 +235,7 @@ with aba_admin:
                         if col_b2.button("🚀 ENVIAR PARA CHRISTIAN", key=f"send_ch_{idx}"):
                             solic['Status'] = "Pendente"
                             if enviar_aviso_ao_christian(solic):
-                                st.success("Enviado! Christian recebeu um e-mail de aviso.")
+                                st.success("Enviado! Christian recebeu um e-mail com o link do portal.")
                             else:
                                 st.warning("Enviado para aba, mas houve erro no e-mail de aviso.")
                             st.rerun()
