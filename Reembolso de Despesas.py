@@ -61,45 +61,9 @@ def enviar_aviso_ao_gabriel(solicitacao):
     - Colaborador: {solicitacao['Colaborador']}
     - Data do Envio: {solicitacao['Data']}
     
-    Por favor, acesse o portal para verificar os dados e o anexo antes de enviar para o Christian:
+    Por favor, acesse o portal para verificar, ajustar e aprovar a solicitação:
     https://reembolsodespesas.streamlit.app/
     A senha para acesso é: globus2026
-    """
-    msg.attach(MIMEText(corpo, 'plain'))
-
-    try:
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()
-        server.login(remetente, senha)
-        server.send_message(msg)
-        server.quit()
-        return True
-    except Exception as e:
-        return False
-
-def enviar_aviso_ao_christian(solicitacao):
-    """Envia e-mail para o Christian avisando que há algo para aprovar"""
-    destinatario = "christian.wellisch@globusseguros.com.br"
-    remetente = "victormoreiraicnv@gmail.com"
-    senha = "odym ioqm ybew ejnn"
-
-    msg = MIMEMultipart()
-    msg['From'] = remetente
-    msg['To'] = destinatario
-    msg['Subject'] = f"🔔 Pendente de Aprovação: Reembolso ID {solicitacao['id']} - {solicitacao['Colaborador']}"
-
-    corpo = f"""
-    Olá Christian Wellisch,
-    
-    O Gabriel Coelho acabou de verificar e liberar uma nova solicitação de reembolso para sua aprovação final.
-    
-    DETALHES:
-    - ID: {solicitacao['id']}
-    - Colaborador: {solicitacao['Colaborador']}
-    
-    Para aprovar ou reprovar, acesse:
-    https://reembolsodespesas.streamlit.app/
-    A sua senha para acesso é : maldivas2026
     """
     msg.attach(MIMEText(corpo, 'plain'))
 
@@ -124,7 +88,7 @@ def enviar_email_automatico(dados, arquivo_pdf, arquivo_comprovante):
     status_formatado = dados['Status'].upper()
     msg['Subject'] = f"[{status_formatado}] Reembolso: {dados['Colaborador']} - ID {dados['id']}"
 
-    corpo = f"Olá Gabriel Coelho,\n\nUma solicitação de reembolso foi processada no Portal Globus.\n\nColaborador: {dados['Colaborador']}\nStatus: {status_formatado}\n"
+    corpo = f"Olá Gabriel Coelho,\n\nUma solicitação de reembolso foi finalizada por você no Portal Globus.\n\nColaborador: {dados['Colaborador']}\nStatus: {status_formatado}\n"
     if dados['Status'] == "Reprovado":
         corpo += f"\nMOTIVO DA REPROVAÇÃO: {dados.get('Comentario', 'Não informado')}"
     
@@ -163,7 +127,7 @@ def gerar_relatorio_pdf(dados, nome_arquivo):
     info_data = [
         [Paragraph("<b>ID SOLICITAÇÃO:</b>", styles['Normal']), f"#{dados['id']}", Paragraph("<b>DATA:</b>", styles['Normal']), dados['Data']],
         [Paragraph("<b>COLABORADOR:</b>", styles['Normal']), dados['Colaborador'], Paragraph("<b>STATUS:</b>", styles['Normal']), dados['Status']],
-        [Paragraph("<b>APROVADOR:</b>", styles['Normal']), "CHRISTIAN WELLISCH", "", ""]
+        [Paragraph("<b>APROVADOR:</b>", styles['Normal']), "GABRIEL COELHO", "", ""]
     ]
     t_info = Table(info_data, colWidths=[1.2*inch, 2.5*inch, 1*inch, 1.8*inch])
     t_info.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 0.5, colors.grey), ('VALIGN', (0,0), (-1,-1), 'MIDDLE'), ('BACKGROUND', (0,0), (0,-1), colors.whitesmoke)]))
@@ -188,7 +152,7 @@ def gerar_relatorio_pdf(dados, nome_arquivo):
 if 'db' not in st.session_state: st.session_state.db = []
 if 'items_reembolso' not in st.session_state: st.session_state.items_reembolso = [{"categoria": CATEGORIAS[0], "valor": None, "motivo": ""}]
 
-aba_colab, aba_admin, aba_christian = st.tabs(["🚀 Solicitar Reembolso", "🔑 Verificação (Gabriel)", "⚖️ Aprovação (Christian)"])
+aba_colab, aba_admin = st.tabs(["🚀 Solicitar Reembolso", "🔑 Verificação e Aprovação (Gabriel)"])
 
 with aba_colab:
     st.header("Nova Solicitação")
@@ -231,49 +195,35 @@ with aba_colab:
             st.error("Preencha todos os campos.")
 
 with aba_admin:
-    st.header("Painel de Verificação - Gabriel Coelho")
-    senha_adm = st.text_input("Senha de Admin", type="password")
+    st.header("Painel de Controle - Gabriel Coelho")
+    senha_adm = st.text_input("Senha de Acesso", type="password")
     if senha_adm == "globus2026":
-        verificar = [s for s in st.session_state.db if s['Status'] in ["Em Verificação", "Pendente"]]
-        if not verificar: st.info("Nada para verificar.")
+        verificar = [s for s in st.session_state.db if s['Status'] == "Em Verificação"]
+        if not verificar: st.info("Não há solicitações pendentes para sua aprovação.")
         for idx, solic in enumerate(verificar):
             with st.expander(f"ID {solic['id']} - {solic['Colaborador']}"):
                 c_edit, c_view = st.columns([1.5, 1])
                 with c_edit:
-                    solic['Colaborador'] = st.text_input("Nome", solic['Colaborador'], key=f"adm_n_{idx}")
+                    solic['Colaborador'] = st.text_input("Nome do Colaborador", solic['Colaborador'], key=f"adm_n_{idx}")
                     for i_item, item in enumerate(solic['Detalhes']):
                         ec1, ec2, ec3 = st.columns([2, 1.2, 2])
                         item['categoria'] = ec1.selectbox(f"Cat {i_item+1}", CATEGORIAS, index=CATEGORIAS.index(item['categoria']), key=f"adm_cat_{idx}_{i_item}")
                         item['valor'] = ec2.number_input(f"Valor", value=float(item['valor'] or 0), format="%.2f", key=f"adm_v_{idx}_{i_item}")
                         item['motivo'] = ec3.text_input(f"Motivo", value=item['motivo'], key=f"adm_m_{idx}_{i_item}")
-                    if st.button("Salvar", key=f"save_{idx}"): st.rerun()
-                    if solic['Status'] == "Em Verificação":
-                        if st.button("🚀 ENVIAR PARA CHRISTIAN", key=f"send_ch_{idx}"):
-                            solic['Status'] = "Pendente"
-                            enviar_aviso_ao_christian(solic)
-                            st.rerun()
+                    
+                    st.markdown("---")
+                    decisao = st.radio("Sua Decisão", ["Aprovado", "Reprovado"], key=f"dec_{idx}", horizontal=True)
+                    motivo_final = st.text_area("Justificativa / Comentário Interno", key=f"com_{idx}")
+                    
+                    if st.button("FINALIZAR E ENVIAR RELATÓRIO", key=f"fin_{idx}"):
+                        solic['Status'] = decisao
+                        solic['Comentario'] = motivo_final
+                        nome_pdf = f"Relatorio_ID_{solic['id']}.pdf"
+                        gerar_relatorio_pdf(solic, nome_pdf)
+                        enviar_email_automatico(solic, nome_pdf, solic['CaminhoArquivo'])
+                        st.success(f"Solicitação #{solic['id']} finalizada com sucesso!")
+                        st.rerun()
                 with c_view:
                     with open(solic['CaminhoArquivo'], "rb") as f:
                         st.download_button(label="📂 Baixar Comprovante", data=f, file_name=os.path.basename(solic['CaminhoArquivo']), key=f"dl_{idx}")
-
-with aba_christian:
-    st.header("Portal de Aprovação - Christian Wellisch")
-    senha_ch = st.text_input("Senha do Christian", type="password")
-    if senha_ch == "maldivas2026":
-        pendentes = [s for s in st.session_state.db if s['Status'] == "Pendente"]
-        if not pendentes: st.info("Aguardando Gabriel.")
-        for solic in pendentes:
-            with st.expander(f"SOLICITAÇÃO #{solic['id']} - {solic['Colaborador']}"):
-                df_f = pd.DataFrame(solic['Detalhes'])
-                df_f['valor'] = df_f['valor'].apply(formatar_moeda)
-                st.table(df_f)
-                decisao = st.radio("Decisão", ["Aprovado", "Reprovado"], key=f"d_{solic['id']}", horizontal=True)
-                motivo = st.text_area("Justificativa", key=f"c_{solic['id']}")
-                if st.button("Finalizar", key=f"b_{solic['id']}"):
-                    solic['Status'] = decisao
-                    solic['Comentario'] = motivo
-                    nome_pdf = f"Relatorio_ID_{solic['id']}.pdf"
-                    gerar_relatorio_pdf(solic, nome_pdf)
-                    enviar_email_automatico(solic, nome_pdf, solic['CaminhoArquivo'])
-                    st.rerun()
-    elif senha_ch != "": st.error("Senha incorreta.")
+    elif senha_adm != "": st.error("Senha incorreta.")
