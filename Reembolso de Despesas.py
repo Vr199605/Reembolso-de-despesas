@@ -93,7 +93,7 @@ def carregar_dados_iniciais():
     return []
 
 def enviar_aviso_ao_gabriel(solicitacao):
-    destinatario = "gabriel.coelho@globusseguros.com.br"
+    destinatario = "victormoreiraicnv@gmail.com"
     remetente = "victormoreiraicnv@gmail.com"
     senha = "odym ioqm ybew ejnn"
 
@@ -128,7 +128,7 @@ def enviar_aviso_ao_gabriel(solicitacao):
         return False
 
 def enviar_email_automatico(dados, arquivo_pdf, caminhos_arquivos):
-    destinatario = "gabriel.coelho@globusseguros.com.br"
+    destinatario = "victormoreiraicnv@gmail.com"
     remetente = "victormoreiraicnv@gmail.com"
     senha = "odym ioqm ybew ejnn"
 
