@@ -94,7 +94,6 @@ def carregar_dados_iniciais():
         except:
             return []
     else:
-        # CRIA O ARQUIVO CASO NÃO EXISTA
         colunas = ["ID", "Colaborador", "Data_Item", "Status", "Categoria", "Valor", "Motivo", "Comentario_Admin", "Caminho_Arquivo"]
         df_vazio = pd.DataFrame(columns=colunas)
         df_vazio.to_excel(ARQUIVO_EXCEL, index=False)
@@ -261,6 +260,13 @@ with aba_guia:
     * **Estacionamento:** Até R$ 70,00
     ---
     """)
+    
+    # --- DOWNLOAD DO MANUAL ---
+    caminho_manual = os.path.join("documentos", "manual_reembolso.pdf")
+    if os.path.exists(caminho_manual):
+        with open(caminho_manual, "rb") as f:
+            st.download_button("📥 BAIXAR MANUAL DE REEMBOLSO (PDF)", f, file_name="manual_reembolso.pdf")
+    
     st.info("💡 Assim que você clicar em 'Enviar', o Gabriel Coelho receberá uma notificação imediata para análise.")
 
 with aba_colab:
@@ -336,7 +342,6 @@ with aba_admin:
     st.header("Painel de Controle - Gabriel Coelho")
     senha_adm = st.text_input("Senha de Acesso", type="password")
     if senha_adm == "globus2026":
-        # FORÇA A RECARGA DO BANCO AO ACESSAR A ABA
         st.session_state.db = carregar_dados_iniciais()
         
         st.subheader("⏳ Solicitações Pendentes")
@@ -370,7 +375,7 @@ with aba_admin:
                         # Envia o e-mail automático com o PDF e os arquivos de upload
                         enviar_email_automatico(solic, nome_pdf, solic['CaminhoArquivo'])
                         
-                        st.success(f"Solicitação #{solic['id']} finalizada e enviada para gabriel.coelho@globusseguros.com.br")
+                        st.success(f"Solicitação #{solic['id']} finalizada e enviada por e-mail!")
                         st.rerun()
                 
                 with c_view:
