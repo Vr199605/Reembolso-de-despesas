@@ -249,9 +249,11 @@ def gerar_relatorio_mensal_pdf(lista_solicitacoes, mes_ano, nome_arquivo):
     elements.append(t_res)
     doc.build(elements)
 
-# --- INICIALIZAÇÃO DE DADOS ---
-if 'db' not in st.session_state: st.session_state.db = carregar_dados_iniciais()
-if 'items_reembolso' not in st.session_state: st.session_state.items_reembolso = [{"categoria": CATEGORIAS[0], "valor": None, "motivo": "", "data": datetime.now()}]
+# --- INICIALIZAÇÃO DE DADOS (FORA DAS ABAS PARA GARANTIR SINCRONIA) ---
+st.session_state.db = carregar_dados_iniciais()
+
+if 'items_reembolso' not in st.session_state: 
+    st.session_state.items_reembolso = [{"categoria": CATEGORIAS[0], "valor": None, "motivo": "", "data": datetime.now()}]
 
 # --- INTERFACE ---
 aba_guia, aba_colab, aba_admin = st.tabs(["📖 Guia de Preenchimento", "🚀 Solicitar Reembolso", "🔑 Verificação e Aprovação (Gabriel)"])
@@ -354,7 +356,7 @@ with aba_colab:
                 detalhes_limpos.append(d)
                 
             nova_solic = {
-                "id": len(carregar_dados_iniciais()) + 1,
+                "id": len(st.session_state.db) + 1,
                 "Colaborador": nome, 
                 "Data": datetime.now().strftime("%d/%m/%Y"), 
                 "Detalhes": detalhes_limpos, 
@@ -362,12 +364,12 @@ with aba_colab:
                 "CaminhoArquivo": caminhos, 
                 "Comentario": ""
             }
-            st.session_state.db = carregar_dados_iniciais()
             st.session_state.db.append(nova_solic)
             atualizar_excel()
             enviar_aviso_ao_gabriel(nova_solic)
             st.session_state.items_reembolso = [{"categoria": CATEGORIAS[0], "valor": None, "motivo": "", "data": datetime.now()}]
             st.success("Enviado! Gabriel Coelho recebeu um e-mail para verificar.")
+            st.rerun()
         else:
             st.error("Preencha todos os campos corretamente.")
 
@@ -375,8 +377,6 @@ with aba_admin:
     st.header("Painel de Controle - Gabriel Coelho")
     senha_adm = st.text_input("Senha de Acesso", type="password")
     if senha_adm == "globus2026":
-        # Sincronização automática ao entrar na aba
-        st.session_state.db = carregar_dados_iniciais()
         
         st.subheader("📊 Relatórios e Fechamento Mensal")
         col_m1, col_m2 = st.columns([1, 2])
@@ -396,6 +396,8 @@ with aba_admin:
 
         st.markdown("---")
         st.subheader("⏳ Solicitações Pendentes")
+        
+        # Filtra apenas o que está em verificação
         verificar = [s for s in st.session_state.db if s['Status'] == "Em Verificação"]
         
         if not verificar:
@@ -426,8 +428,7 @@ with aba_admin:
                         st.success(f"Solicitação #{solic['id']} finalizada!")
                         st.rerun()
                     
-                    # Botão Resetar PDF / Registro (conforme pedido)
-                    if col_res.button("🗑️ Resetar/Apagar Solicitação", key=f"res_admin_{idx}", help="Remove este registro se algo foi enviado errado"):
+                    if col_res.button("🗑️ Resetar/Apagar Solicitação", key=f"res_admin_{idx}"):
                         st.session_state.db = [s for s in st.session_state.db if s['id'] != solic['id']]
                         atualizar_excel()
                         st.warning("Registro removido.")
