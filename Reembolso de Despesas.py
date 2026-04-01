@@ -225,38 +225,6 @@ def gerar_relatorio_pdf(dados, nome_arquivo):
         elements.append(Paragraph(dados['Comentario'], styles['Normal']))
     doc.build(elements)
 
-def gerar_relatorio_mensal_pdf(lista_solicitacoes, mes_ano, nome_arquivo):
-    doc = SimpleDocTemplate(nome_arquivo, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=40, bottomMargin=30)
-    styles = getSampleStyleSheet()
-    elements = []
-    cor_primaria = colors.HexColor("#1f4e79")
-    title_style = ParagraphStyle('TitleStyle', parent=styles['Title'], fontSize=18, textColor=cor_primaria, alignment=1)
-    elements.append(Paragraph("FECHAMENTO MENSAL DE REEMBOLSOS", title_style))
-    elements.append(Paragraph(f"Período: {mes_ano} | Globus Seguros", ParagraphStyle('Sub', alignment=1, spaceAfter=20)))
-    data_table = [["COLABORADOR", "CATEGORIA", "DATA", "VALOR"]]
-    total_periodo = 0
-    gastos_por_colab = {}
-    for s in lista_solicitacoes:
-        colab = s['Colaborador']
-        if colab not in gastos_por_colab: gastos_por_colab[colab] = 0
-        for item in s['Detalhes']:
-            data_item = item.get('data', s['Data'])
-            data_table.append([colab, item['categoria'], data_item, formatar_moeda(item['valor'])])
-            total_periodo += item['valor']
-            gastos_por_colab[colab] += item['valor']
-    t = Table(data_table, colWidths=[2*inch, 2.3*inch, 1.2*inch, 1.5*inch])
-    t.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), cor_primaria), ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke), ('GRID', (0,0), (-1,-1), 0.5, colors.grey), ('ALIGN', (-1,0), (-1,-1), 'RIGHT')]))
-    elements.append(t)
-    elements.append(Spacer(1, 30))
-    elements.append(Paragraph("<b>RESUMO POR COLABORADOR</b>", styles['Normal']))
-    resumo_data = [["COLABORADOR", "TOTAL"]]
-    for c, v in gastos_por_colab.items(): resumo_data.append([c, formatar_moeda(v)])
-    resumo_data.append(["TOTAL GERAL", formatar_moeda(total_periodo)])
-    t_res = Table(resumo_data, colWidths=[4*inch, 3*inch])
-    t_res.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 0.5, colors.grey), ('BACKGROUND', (0,-1), (-1,-1), colors.whitesmoke), ('FONTNAME', (0,-1), (-1,-1), 'Helvetica-Bold')]))
-    elements.append(t_res)
-    doc.build(elements)
-
 # --- INICIALIZAÇÃO DE DADOS ---
 if 'db' not in st.session_state: 
     st.session_state.db = carregar_dados_iniciais()
@@ -371,29 +339,6 @@ with aba_admin:
         # FORÇA A RECARGA DO BANCO AO ACESSAR A ABA
         st.session_state.db = carregar_dados_iniciais()
         
-        st.subheader("📊 Relatórios e Fechamento Mensal")
-        col_m1, col_m2 = st.columns([1, 2])
-        mapa_meses = {"Janeiro": "/01/", "Fevereiro": "/02/", "Março": "/03/", "Abril": "/04/", "Maio": "/05/", "Junho": "/06/", "Julho": "/07/", "Agosto": "/08/", "Setembro": "/09/", "Outubro": "/10/", "Novembro": "/11/", "Dezembro": "/12/"}
-        opcoes_meses = ["Todos"] + list(mapa_meses.keys())
-        mes_ref = col_m1.selectbox("Selecione o Mês", opcoes_meses)
-        ano_ref = col_m2.selectbox("Ano", [2025, 2026, 2027])
-        
-        if st.button("📄 GERAR PDF DE FECHAMENTO MENSAL"):
-            if mes_ref == "Todos":
-                solicitacoes_filtradas = [s for s in st.session_state.db if s['Status'] == "Aprovado" and str(ano_ref) in s['Data']]
-            else:
-                filtro_mes = mapa_meses[mes_ref]
-                solicitacoes_filtradas = [s for s in st.session_state.db if s['Status'] == "Aprovado" and filtro_mes in s['Data'] and str(ano_ref) in s['Data']]
-            
-            if solicitacoes_filtradas:
-                nome_pdf_mensal = f"Fechamento_{mes_ref}_{ano_ref}.pdf"
-                gerar_relatorio_mensal_pdf(solicitacoes_filtradas, f"{mes_ref}/{ano_ref}", nome_pdf_mensal)
-                with open(nome_pdf_mensal, "rb") as f:
-                    st.download_button("📥 Baixar Relatório Mensal Consolidado", f, file_name=nome_pdf_mensal)
-            else:
-                st.warning("Sem despesas aprovadas no período.")
-
-        st.markdown("---")
         st.subheader("⏳ Solicitações Pendentes")
         verificar = [s for s in st.session_state.db if s['Status'] == "Em Verificação"]
         
@@ -404,6 +349,7 @@ with aba_admin:
             with st.expander(f"ID {solic['id']} - {solic['Colaborador']}"):
                 c_edit, c_view = st.columns([1.5, 1])
                 with c_edit:
+                    st.write("📝 **Ajustar e Processar:**")
                     for i_item, item in enumerate(solic['Detalhes']):
                         ec0, ec1, ec2, ec3 = st.columns([1, 1.5, 1, 1.5])
                         item['data'] = ec0.text_input(f"Data", value=item.get('data', solic['Data']), key=f"adm_d_{idx}_{i_item}")
@@ -414,14 +360,17 @@ with aba_admin:
                     decisao = st.radio("Sua Decisão", ["Aprovado", "Reprovado"], key=f"dec_{idx}", horizontal=True)
                     motivo_final = st.text_area("Justificativa", key=f"com_{idx}")
                     
-                    if st.button("FINALIZAR", key=f"fin_{idx}"):
+                    if st.button("FINALIZAR E ENVIAR E-MAIL", key=f"fin_{idx}"):
                         solic['Status'] = decisao
                         solic['Comentario'] = motivo_final
                         atualizar_excel()
                         nome_pdf = f"Relatorio_ID_{solic['id']}.pdf"
                         gerar_relatorio_pdf(solic, nome_pdf)
+                        
+                        # Envia o e-mail automático com o PDF e os arquivos de upload
                         enviar_email_automatico(solic, nome_pdf, solic['CaminhoArquivo'])
-                        st.success(f"Solicitação #{solic['id']} finalizada!")
+                        
+                        st.success(f"Solicitação #{solic['id']} finalizada e enviada para gabriel.coelho@globusseguros.com.br")
                         st.rerun()
                 
                 with c_view:
