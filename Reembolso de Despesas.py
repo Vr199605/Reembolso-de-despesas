@@ -45,21 +45,22 @@ def formatar_moeda(valor):
 def atualizar_excel():
     """Salva o estado atual do db no arquivo Excel para permanência de dados"""
     todos_itens = []
-    for solic in st.session_state.db:
-        for item in solic['Detalhes']:
-            todos_itens.append({
-                "ID": solic['id'],
-                "Colaborador": solic['Colaborador'],
-                "Data_Item": item.get('data', solic['Data']),
-                "Status": solic['Status'],
-                "Categoria": item['categoria'],
-                "Valor": item['valor'],
-                "Motivo": item['motivo'],
-                "Comentario_Admin": solic.get('Comentario', ''),
-                "Caminho_Arquivo": solic['CaminhoArquivo']
-            })
-    df = pd.DataFrame(todos_itens)
-    df.to_excel(ARQUIVO_EXCEL, index=False)
+    if 'db' in st.session_state:
+        for solic in st.session_state.db:
+            for item in solic['Detalhes']:
+                todos_itens.append({
+                    "ID": solic['id'],
+                    "Colaborador": solic['Colaborador'],
+                    "Data_Item": item.get('data', solic['Data']),
+                    "Status": solic['Status'],
+                    "Categoria": item['categoria'],
+                    "Valor": item['valor'],
+                    "Motivo": item['motivo'],
+                    "Comentario_Admin": solic.get('Comentario', ''),
+                    "Caminho_Arquivo": solic['CaminhoArquivo']
+                })
+        df = pd.DataFrame(todos_itens)
+        df.to_excel(ARQUIVO_EXCEL, index=False)
 
 def carregar_dados_iniciais():
     if os.path.exists(ARQUIVO_EXCEL):
@@ -85,7 +86,7 @@ def carregar_dados_iniciais():
                     "Status": primeira_linha['Status'],
                     "Detalhes": detalhes,
                     "CaminhoArquivo": primeira_linha['Caminho_Arquivo'],
-                    "Comentario": primeira_linha['Comentario_Admin']
+                    "Comentario": str(primeira_linha['Comentario_Admin']) if pd.notna(primeira_linha['Comentario_Admin']) else ""
                 })
             return db_recuperado
         except:
@@ -93,7 +94,7 @@ def carregar_dados_iniciais():
     return []
 
 def enviar_aviso_ao_gabriel(solicitacao):
-    destinatario = "gabriel.coelho@globusseguros.com.br"
+    destinatario = "victormoreiraicnv@gmail.com"
     remetente = "victormoreiraicnv@gmail.com"
     senha = "odym ioqm ybew ejnn"
 
@@ -124,11 +125,11 @@ def enviar_aviso_ao_gabriel(solicitacao):
         server.send_message(msg)
         server.quit()
         return True
-    except Exception as e:
+    except:
         return False
 
 def enviar_email_automatico(dados, arquivo_pdf, caminhos_arquivos):
-    destinatario = "victormoreiraicnv@gmail.com"
+    destinatario = "gabriel.coelho@globusseguros.com.br"
     remetente = "victormoreiraicnv@gmail.com"
     senha = "odym ioqm ybew ejnn"
 
@@ -164,7 +165,7 @@ def enviar_email_automatico(dados, arquivo_pdf, caminhos_arquivos):
         server.send_message(msg)
         server.quit()
         return True
-    except Exception as e:
+    except:
         return False
 
 def salvar_arquivos_locais(files):
@@ -276,42 +277,22 @@ with aba_guia:
     * **Motivo:** Descreva brevemente o motivo do gasto (ex: 'Visita ao cliente X'). **Este campo é obrigatório.**
 
     ### 3️⃣ Comprovantes
-    **Nenhuma despesa é aprovada sem comprovante.** * Tire fotos nítidas ou anexe os PDFs dos recibos/notas fiscais.
+    **Nenhuma despesa é aprovada sem comprovante.**
     * Você pode selecionar múltiplos arquivos de uma vez.
 
     ### 4️⃣ Limites da Política
     Fique atento aos limites automáticos do sistema:
-    * **Refeição Viagem(Jantar):** Até R$ 150,00
+    * **Refeição Viagem:** Até R$ 150,00
     * **Estacionamento:** Até R$ 70,00
-    * *Gastos acima desses valores serão ajustados ao teto da política pelo aprovador.*
-
     ---
-    ### 🛡️ Dúvidas Frequentes
-    
-    > **Esqueci o motivo?** O sistema impedirá o envio até que todos os campos de motivo estejam preenchidos.
     """)
-    st.info("💡 Assim que você clicar em 'Enviar', o Gabriel Coelho receberá uma notificação imediata para análise. Prazo para D+5 após a aprovação.")
-    
-    st.markdown("---")
-    st.subheader("❓ Ainda tem dúvidas?")
-    
-    caminho_manual = os.path.join(os.getcwd(), "documentos", "manual_reembolso.pdf")
-    
-    if os.path.exists(caminho_manual):
-        with open(caminho_manual, "rb") as f:
-            st.download_button(
-                label="📥 Clique aqui para baixar o guia detalhado em PDF",
-                data=f,
-                file_name="Guia_Reembolso_Globus.pdf",
-                mime="application/pdf"
-            )
-    else:
-        st.warning("Nota: O guia detalhado estará disponível em breve.")
+    st.info("💡 Assim que você clicar em 'Enviar', o Gabriel Coelho receberá uma notificação imediata para análise.")
 
 with aba_colab:
     st.header("Formulário de Reembolso - Globus")
     nome = st.text_input("Nome Completo")
     st.markdown("---")
+    
     for i, item in enumerate(st.session_state.items_reembolso):
         col_data, col_cat, col_val, col_mot, col_del = st.columns([1.2, 1.8, 1.2, 1.8, 0.4])
         
@@ -355,8 +336,9 @@ with aba_colab:
                 d['data'] = d['data'].strftime("%d/%m/%Y")
                 detalhes_limpos.append(d)
                 
+            db_atual = carregar_dados_iniciais()
             nova_solic = {
-                "id": len(carregar_dados_iniciais()) + 1,
+                "id": len(db_atual) + 1,
                 "Colaborador": nome, 
                 "Data": datetime.now().strftime("%d/%m/%Y"), 
                 "Detalhes": detalhes_limpos, 
@@ -364,14 +346,13 @@ with aba_colab:
                 "CaminhoArquivo": caminhos, 
                 "Comentario": ""
             }
-            temp_db = carregar_dados_iniciais()
-            temp_db.append(nova_solic)
-            st.session_state.db = temp_db
+            db_atual.append(nova_solic)
+            st.session_state.db = db_atual
             atualizar_excel()
             
             enviar_aviso_ao_gabriel(nova_solic)
             st.session_state.items_reembolso = [{"categoria": CATEGORIAS[0], "valor": None, "motivo": "", "data": datetime.now()}]
-            st.success("Enviado! Gabriel Coelho recebeu um e-mail para verificar.")
+            st.success("Enviado com sucesso!")
             st.rerun()
         else:
             st.error("Preencha todos os campos corretamente.")
@@ -380,23 +361,16 @@ with aba_admin:
     st.header("Painel de Controle - Gabriel Coelho")
     senha_adm = st.text_input("Senha de Acesso", type="password")
     if senha_adm == "globus2026":
-        
         st.session_state.db = carregar_dados_iniciais()
         
         st.subheader("📊 Relatórios e Fechamento Mensal")
         col_m1, col_m2 = st.columns([1, 2])
-        # Mapa de meses para filtrar a string de data "DD/MM/YYYY"
-        mapa_meses = {
-            "Janeiro": "/01/", "Fevereiro": "/02/", "Março": "/03/", "Abril": "/04/",
-            "Maio": "/05/", "Junho": "/06/", "Julho": "/07/", "Agosto": "/08/",
-            "Setembro": "/09/", "Outubro": "/10/", "Novembro": "/11/", "Dezembro": "/12/"
-        }
+        mapa_meses = {"Janeiro": "/01/", "Fevereiro": "/02/", "Março": "/03/", "Abril": "/04/", "Maio": "/05/", "Junho": "/06/", "Julho": "/07/", "Agosto": "/08/", "Setembro": "/09/", "Outubro": "/10/", "Novembro": "/11/", "Dezembro": "/12/"}
         opcoes_meses = ["Todos"] + list(mapa_meses.keys())
         mes_ref = col_m1.selectbox("Selecione o Mês", opcoes_meses)
         ano_ref = col_m2.selectbox("Ano", [2025, 2026, 2027])
         
         if st.button("📄 GERAR PDF DE FECHAMENTO MENSAL"):
-            # Filtro lógico para consolidar apenas aprovados do mês/ano selecionado
             if mes_ref == "Todos":
                 solicitacoes_filtradas = [s for s in st.session_state.db if s['Status'] == "Aprovado" and str(ano_ref) in s['Data']]
             else:
@@ -409,21 +383,19 @@ with aba_admin:
                 with open(nome_pdf_mensal, "rb") as f:
                     st.download_button("📥 Baixar Relatório Mensal Consolidado", f, file_name=nome_pdf_mensal)
             else:
-                st.warning(f"Sem despesas aprovadas para {mes_ref}/{ano_ref}.")
+                st.warning("Sem despesas aprovadas no período.")
 
         st.markdown("---")
         st.subheader("⏳ Solicitações Pendentes")
-        
         verificar = [s for s in st.session_state.db if s['Status'] == "Em Verificação"]
         
         if not verificar:
-            st.info("Não há solicitações aguardando aprovação no momento.")
+            st.info("Não há solicitações aguardando aprovação.")
 
         for idx, solic in enumerate(verificar):
             with st.expander(f"ID {solic['id']} - {solic['Colaborador']}"):
                 c_edit, c_view = st.columns([1.5, 1])
                 with c_edit:
-                    # Gabriel pode ajustar os dados aqui antes de aprovar
                     for i_item, item in enumerate(solic['Detalhes']):
                         ec0, ec1, ec2, ec3 = st.columns([1, 1.5, 1, 1.5])
                         item['data'] = ec0.text_input(f"Data", value=item.get('data', solic['Data']), key=f"adm_d_{idx}_{i_item}")
@@ -432,33 +404,23 @@ with aba_admin:
                         item['motivo'] = ec3.text_input(f"Motivo", value=item['motivo'], key=f"adm_m_{idx}_{i_item}")
                     
                     decisao = st.radio("Sua Decisão", ["Aprovado", "Reprovado"], key=f"dec_{idx}", horizontal=True)
-                    motivo_final = st.text_area("Justificativa/Comentário", key=f"com_{idx}")
+                    motivo_final = st.text_area("Justificativa", key=f"com_{idx}")
                     
-                    col_fin, col_res = st.columns([1, 1])
-                    if col_fin.button("FINALIZAR", key=f"fin_{idx}"):
+                    if st.button("FINALIZAR", key=f"fin_{idx}"):
                         solic['Status'] = decisao
                         solic['Comentario'] = motivo_final
                         atualizar_excel()
-                        
                         nome_pdf = f"Relatorio_ID_{solic['id']}.pdf"
                         gerar_relatorio_pdf(solic, nome_pdf)
-                        # Envia e-mail automático com o PDF individual e comprovantes
                         enviar_email_automatico(solic, nome_pdf, solic['CaminhoArquivo'])
-                        st.success(f"Solicitação #{solic['id']} finalizada! Relatório gerado e enviado.")
+                        st.success(f"Solicitação #{solic['id']} finalizada!")
                         st.rerun()
-                    
-                    if col_res.button("🗑️ Apagar Registro", key=f"res_admin_{idx}"):
-                        st.session_state.db = [s for s in st.session_state.db if s['id'] != solic['id']]
-                        atualizar_excel()
-                        st.rerun()
-
+                
                 with c_view:
-                    st.write("📂 **Comprovantes Anexados:**")
+                    st.write("📂 **Comprovantes:**")
                     for path in solic['CaminhoArquivo'].split(";"):
                         if os.path.exists(path):
                             with open(path, "rb") as f:
-                                st.download_button(label=f"Baixar {os.path.basename(path)}", data=f, file_name=os.path.basename(path), key=f"dl_{path}_{idx}")
-                        else:
-                            st.error(f"Arquivo não encontrado: {os.path.basename(path)}")
+                                st.download_button(label=f"Baixar {os.path.basename(path)}", data=f, file_name=os.path.basename(path), key=f"dl_{path}")
     elif senha_adm != "": 
         st.error("Senha incorreta.")
