@@ -320,7 +320,7 @@ if 'db' not in st.session_state:
 if 'items_reembolso' not in st.session_state: 
     st.session_state.items_reembolso = [{"categoria": CATEGORIAS[0], "valor": None, "motivo": "", "data": datetime.now()}]
 
-# --- ABA DE PASSO A PASSO (NOVA) ---
+# --- ABA DE PASSO A PASSO ---
 aba_guia, aba_colab, aba_admin = st.tabs(["📖 Guia de Preenchimento", "🚀 Solicitar Reembolso", "🔑 Verificação e Aprovação (Gabriel)"])
 
 with aba_guia:
@@ -357,10 +357,13 @@ with aba_guia:
     """)
     st.info("💡 Assim que você clicar em 'Enviar', o Gabriel Coelho receberá uma notificação imediata para análise. Prazo para D+5 após a aprovação.")
     
-    # --- NOVO BOTÃO DE DOWNLOAD (OPÇÃO 2) ---
+    # --- BOTÃO DE DOWNLOAD (AJUSTADO PARA APARECER) ---
     st.markdown("---")
     st.subheader("❓ Ainda tem dúvidas?")
-    caminho_manual = "documentos/manual_reembolso.pdf"
+    
+    # Define o caminho absoluto para evitar erro de localização
+    base_path = os.path.dirname(__file__)
+    caminho_manual = os.path.join(base_path, "documentos", "manual_reembolso.pdf")
     
     if os.path.exists(caminho_manual):
         with open(caminho_manual, "rb") as f:
@@ -371,8 +374,9 @@ with aba_guia:
                 mime="application/pdf"
             )
     else:
-        st.caption("Nota: O guia detalhado estará disponível em breve.")
+        st.warning(f"Atenção: O arquivo 'manual_reembolso.pdf' não foi encontrado dentro da pasta 'documentos'. Verifique o nome do arquivo no seu GitHub.")
 
+# --- RESTO DO CÓDIGO (ABAS COLAB E ADMIN) ---
 with aba_colab:
     st.header("Formulário de Reembolso - Globus")
     nome = st.text_input("Nome Completo")
