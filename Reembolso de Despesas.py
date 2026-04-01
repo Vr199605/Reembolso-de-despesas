@@ -33,9 +33,9 @@ CATEGORIAS = [
     "OUTROS* (em R$)"
 ]
 VALOR_KM = 1.37
-ARQUIVO_EXCEL = "base_reembolsos.xlsx"
-# LINK DA SUA PLANILHA GOOGLE ATUALIZADO
-URL_GOOGLE_SHEETS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT91PST4WLbGEWCEbIzaslCurwyOeJYMJHaTTcbQsgX0LrnVU_p_A5gnlfTjIQJs7KxyKTTREmSAJJE/pub?output=csv"
+ARQUIVO_EXCEL_LOCAL = "base_reembolsos.xlsx"
+# LINK DA SUA PLANILHA GOOGLE EM FORMATO XLSX
+URL_GOOGLE_EXCEL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT91PST4WLbGEWCEbIzaslCurwyOeJYMJHaTTcbQsgX0LrnVU_p_A5gnlfTjIQJs7KxyKTTREmSAJJE/pub?output=xlsx"
 
 # --- FUNÇÕES DE AUXÍLIO ---
 def formatar_moeda(valor):
@@ -61,20 +61,21 @@ def atualizar_excel():
                 "Caminho_Arquivo": solic['CaminhoArquivo']
             })
     df = pd.DataFrame(todos_itens)
-    df.to_excel(ARQUIVO_EXCEL, index=False)
+    df.to_excel(ARQUIVO_EXCEL_LOCAL, index=False)
 
 def carregar_dados_iniciais():
-    """Tenta carregar do Google Sheets primeiro, depois do Excel local"""
+    """Tenta carregar do Google Sheets (XLSX) primeiro, depois do Excel local"""
     try:
-        # TENTA LER DO GOOGLE SHEETS
-        df = pd.read_csv(URL_GOOGLE_SHEETS).dropna(how='all')
+        # LER DO GOOGLE SHEETS EM FORMATO EXCEL (XLSX)
+        # O engine='openpyxl' garante a leitura correta do formato novo
+        df = pd.read_excel(URL_GOOGLE_EXCEL, engine='openpyxl').dropna(how='all')
         df.columns = [c.strip() for c in df.columns]
         return processar_dataframe_universal(df)
-    except:
+    except Exception as e:
         # SE FALHAR, TENTA O EXCEL LOCAL
-        if os.path.exists(ARQUIVO_EXCEL):
+        if os.path.exists(ARQUIVO_EXCEL_LOCAL):
             try:
-                df = pd.read_excel(ARQUIVO_EXCEL)
+                df = pd.read_excel(ARQUIVO_EXCEL_LOCAL)
                 return processar_dataframe_universal(df)
             except:
                 return []
@@ -83,11 +84,15 @@ def carregar_dados_iniciais():
 def processar_dataframe_universal(df):
     """Lógica unificada para transformar DataFrame em lista do sistema"""
     db_recuperado = []
-    if 'ID' not in df.columns: return []
+    # Verifica se a coluna ID existe (pode ser 'ID' ou 'id' dependendo da aba)
+    colunas = df.columns
+    id_col = 'ID' if 'ID' in colunas else ('id' if 'id' in colunas else None)
     
-    for solic_id in df['ID'].unique():
+    if not id_col: return []
+    
+    for solic_id in df[id_col].unique():
         if pd.isna(solic_id): continue
-        df_solic = df[df['ID'] == solic_id]
+        df_solic = df[df[id_col] == solic_id]
         primeira_linha = df_solic.iloc[0]
         detalhes = []
         for _, row in df_solic.iterrows():
@@ -95,7 +100,7 @@ def processar_dataframe_universal(df):
                 "categoria": row.get('Categoria', 'Outros'),
                 "valor": row.get('Valor', 0),
                 "motivo": row.get('Motivo', ''),
-                "data": row.get('Data_Item', row.get('Data Despesa', primeira_linha.get('Data', '01/04/2026')))
+                "data": row.get('Data Despesa', row.get('Data_Item', primeira_linha.get('Data Envio', '01/04/2026')))
             })
         
         db_recuperado.append({
@@ -104,13 +109,13 @@ def processar_dataframe_universal(df):
             "Data": primeira_linha.get('Data Envio', primeira_linha.get('Data', '01/04/2026')),
             "Status": primeira_linha.get('Status', 'Em Verificação'),
             "Detalhes": detalhes,
-            "CaminhoArquivo": primeira_linha.get('Caminho_Arquivo', primeira_linha.get('Comprovante', '')),
+            "CaminhoArquivo": primeira_linha.get('Comprovante', primeira_linha.get('Caminho_Arquivo', '')),
             "Comentario": str(primeira_linha.get('Comentario_Admin', '')) if pd.notna(primeira_linha.get('Comentario_Admin', '')) else ""
         })
     return db_recuperado
 
 def enviar_aviso_ao_gabriel(solicitacao):
-    destinatario = "victormoreiraicnv@gmail.com"
+    destinatario = "gabriel.coelho@globusseguros.com.br"
     remetente = "victormoreiraicnv@gmail.com"
     senha = "odym ioqm ybew ejnn"
 
@@ -145,7 +150,7 @@ def enviar_aviso_ao_gabriel(solicitacao):
         return False
 
 def enviar_email_automatico(dados, arquivo_pdf, caminhos_arquivos):
-    destinatario = "victormoreiraicnv@gmail.com"
+    destinatario = "gabriel.coelho@globusseguros.com.br"
     remetente = "victormoreiraicnv@gmail.com"
     senha = "odym ioqm ybew ejnn"
 
@@ -398,7 +403,7 @@ with aba_admin:
         # BOTÃO PARA FORÇAR SINCRONIA COM GOOGLE
         if st.button("🔄 Sincronizar com Planilha Google"):
             st.session_state.db = carregar_dados_iniciais()
-            st.success("Dados sincronizados!")
+            st.success("Dados sincronizados com a planilha Excel da nuvem!")
         
         st.subheader("📊 Relatórios e Fechamento Mensal")
         col_m1, col_m2 = st.columns([1, 2])
