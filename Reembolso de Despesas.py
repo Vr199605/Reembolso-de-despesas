@@ -337,7 +337,7 @@ with aba_guia:
     * **Data:** Selecione a data exata em que o gasto ocorreu.
     * **Categoria:** Escolha o tipo de despesa (ex: Estacionamento, Uber, Pedágio).
     * **Valor:** Insira o valor conforme o comprovante.
-        * *Nota para KM:* Ao selecionar **KM¹**, insira a quantidade rodada e o sistema calculará automaticamente o valor (R$ 1,37/km).
+    *   *Nota para KM:* Ao selecionar **KM¹**, insira a quantidade rodada e o sistema calculará automaticamente o valor (R$ 1,37/km).
     * **Motivo:** Descreva brevemente o motivo do gasto (ex: 'Visita ao cliente X'). **Este campo é obrigatório.**
 
     ### 3️⃣ Comprovantes
@@ -346,23 +346,20 @@ with aba_guia:
 
     ### 4️⃣ Limites da Política
     Fique atento aos limites automáticos do sistema:
-    * **Refeição Viagem:** Até R$ 150,00
+    * **Refeição Viagem(Jantar):** Até R$ 150,00
     * **Estacionamento:** Até R$ 70,00
-    * **Bebida Alcoólica:** Até R$ 50,00
     * *Gastos acima desses valores serão ajustados ao teto da política pelo aprovador.*
 
     ---
     ### 🛡️ Dúvidas Frequentes
-    > **Almoço com cliente?** Use a categoria **'OUTROS*'** e descreva no motivo.
     
     > **Esqueci o motivo?** O sistema impedirá o envio até que todos os campos de motivo estejam preenchidos.
     """)
-    st.info("💡 Assim que você clicar em 'Enviar', o Gabriel Coelho receberá uma notificação imediata para análise.")
+    st.info("💡 Assim que você clicar em 'Enviar', o Gabriel Coelho receberá uma notificação imediata para análise. Prazo para D+5 após a aprovação.")
 
 with aba_colab:
     st.header("Formulário de Reembolso - Globus")
     nome = st.text_input("Nome Completo")
-    st.info("💡 Observação: Em caso de Almoço com Cliente, favor utilizar a categoria 'OUTROS* (em R$)'")
     st.markdown("---")
     for i, item in enumerate(st.session_state.items_reembolso):
         col_data, col_cat, col_val, col_mot, col_del = st.columns([1.2, 1.8, 1.2, 1.8, 0.4])
@@ -436,19 +433,28 @@ with aba_admin:
     if senha_adm == "globus2026":
         st.subheader("📊 Relatórios e Fechamento Mensal")
         col_m1, col_m2 = st.columns([1, 2])
-        mes_ref = col_m1.selectbox("Selecione o Mês", ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"])
+        
+        # Filtro com opção de selecionar todos os meses
+        opcoes_meses = ["Todos", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
+        mes_ref = col_m1.selectbox("Selecione o Mês", opcoes_meses)
         ano_ref = col_m2.selectbox("Ano", [2025, 2026, 2027])
         
         meses_map = {"Janeiro":"01", "Fevereiro":"02", "Março":"03", "Abril":"04", "Maio":"05", "Junho":"06", "Julho":"07", "Agosto":"08", "Setembro":"09", "Outubro":"10", "Novembro":"11", "Dezembro":"12"}
-        filtro_mes_ano = f"{meses_map[mes_ref]}/{ano_ref}"
         
         solicitacoes_mes = []
         for s in st.session_state.db:
             if s['Status'] == "Aprovado":
-                itens_no_mes = [it for it in s['Detalhes'] if filtro_mes_ano in it.get('data', s['Data'])]
-                if itens_no_mes:
+                if mes_ref == "Todos":
+                    # Se 'Todos' for selecionado, filtra apenas pelo Ano
+                    itens_no_periodo = [it for it in s['Detalhes'] if str(ano_ref) in it.get('data', s['Data'])]
+                else:
+                    # Filtro específico de Mês/Ano
+                    filtro_mes_ano = f"{meses_map[mes_ref]}/{ano_ref}"
+                    itens_no_periodo = [it for it in s['Detalhes'] if filtro_mes_ano in it.get('data', s['Data'])]
+                
+                if itens_no_periodo:
                     s_copy = s.copy()
-                    s_copy['Detalhes'] = itens_no_mes
+                    s_copy['Detalhes'] = itens_no_periodo
                     solicitacoes_mes.append(s_copy)
         
         col_rel_1, col_rel_2 = st.columns([1, 1])
@@ -456,11 +462,12 @@ with aba_admin:
             if st.button("📄 GERAR PDF DE FECHAMENTO MENSAL"):
                 if solicitacoes_mes:
                     nome_pdf_mensal = f"Fechamento_{mes_ref}_{ano_ref}.pdf"
-                    gerar_relatorio_mensal_pdf(solicitacoes_mes, f"{mes_ref}/{ano_ref}", nome_pdf_mensal)
+                    periodo_label = f"{mes_ref}/{ano_ref}" if mes_ref != "Todos" else f"Ano Completo {ano_ref}"
+                    gerar_relatorio_mensal_pdf(solicitacoes_mes, periodo_label, nome_pdf_mensal)
                     with open(nome_pdf_mensal, "rb") as f:
                         st.download_button("📥 Baixar Relatório Mensal", f, file_name=nome_pdf_mensal)
                 else:
-                    st.warning(f"Não existem despesas 'Aprovadas' para {mes_ref}/{ano_ref}.")
+                    st.warning(f"Não existem despesas 'Aprovadas' para o período selecionado.")
         
         with col_rel_2:
             if st.button("🗑️ Resetar Banco de Dados (PDFs)"):
