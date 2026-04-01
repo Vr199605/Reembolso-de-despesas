@@ -386,8 +386,13 @@ with aba_colab:
             st.session_state.items_reembolso.pop(i)
             st.rerun()
             
-    if st.button("➕ Adicionar Outro Item"):
+    col_btns1, col_btns2 = st.columns([1, 1])
+    if col_btns1.button("➕ Adicionar Outro Item"):
         st.session_state.items_reembolso.append({"categoria": CATEGORIAS[0], "valor": None, "motivo": "", "data": datetime.now()})
+        st.rerun()
+
+    if col_btns2.button("🔄 Resetar Ciclo"):
+        st.session_state.items_reembolso = [{"categoria": CATEGORIAS[0], "valor": None, "motivo": "", "data": datetime.now()}]
         st.rerun()
         
     arquivos = st.file_uploader("Anexar Comprovantes (Obrigatório)", type=['pdf', 'png', 'jpg'], accept_multiple_files=True)
