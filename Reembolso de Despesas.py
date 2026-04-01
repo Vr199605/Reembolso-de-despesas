@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, HRFlowable
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.lib.units import inch
@@ -50,7 +50,7 @@ def atualizar_excel():
             todos_itens.append({
                 "ID": solic['id'],
                 "Colaborador": solic['Colaborador'],
-                "Data_Item": item.get('data', solic['Data']), # Usa data do item ou da solicitação (legado)
+                "Data_Item": item.get('data', solic['Data']),
                 "Status": solic['Status'],
                 "Categoria": item['categoria'],
                 "Valor": item['valor'],
@@ -62,7 +62,6 @@ def atualizar_excel():
     df.to_excel(ARQUIVO_EXCEL, index=False)
 
 def carregar_dados_iniciais():
-    """Carrega os dados do Excel para o session_state ao iniciar o app"""
     if os.path.exists(ARQUIVO_EXCEL):
         try:
             df = pd.read_excel(ARQUIVO_EXCEL)
@@ -128,7 +127,7 @@ def enviar_aviso_ao_gabriel(solicitacao):
     except Exception as e:
         return False
 
-def enviar_email_automatico(dados, arquivo_pdf, arquivo_comprovante):
+def enviar_email_automatico(dados, arquivo_pdf, caminhos_arquivos):
     destinatario = "gabriel.coelho@globusseguros.com.br"
     remetente = "victormoreiraicnv@gmail.com"
     senha = "odym ioqm ybew ejnn"
@@ -146,11 +145,19 @@ def enviar_email_automatico(dados, arquivo_pdf, arquivo_comprovante):
     msg.attach(MIMEText(corpo, 'plain'))
 
     try:
-        for arq in [arquivo_pdf, arquivo_comprovante]:
-            if os.path.exists(arq):
-                with open(arq, "rb") as f:
-                    part = MIMEApplication(f.read(), Name=os.path.basename(arq))
-                    part['Content-Disposition'] = f'attachment; filename="{os.path.basename(arq)}"'
+        # Anexa o PDF do relatório
+        if os.path.exists(arquivo_pdf):
+            with open(arquivo_pdf, "rb") as f:
+                part = MIMEApplication(f.read(), Name=os.path.basename(arquivo_pdf))
+                part['Content-Disposition'] = f'attachment; filename="{os.path.basename(arquivo_pdf)}"'
+                msg.attach(part)
+        
+        # Anexa todos os comprovantes (lista separada por ;)
+        for caminho in caminhos_arquivos.split(";"):
+            if os.path.exists(caminho):
+                with open(caminho, "rb") as f:
+                    part = MIMEApplication(f.read(), Name=os.path.basename(caminho))
+                    part['Content-Disposition'] = f'attachment; filename="{os.path.basename(caminho)}"'
                     msg.attach(part)
         
         server = smtplib.SMTP('smtp.gmail.com', 587)
@@ -162,65 +169,112 @@ def enviar_email_automatico(dados, arquivo_pdf, arquivo_comprovante):
     except Exception as e:
         return False
 
-def salvar_arquivo_local(file):
+def salvar_arquivos_locais(files):
     if not os.path.exists("comprovantes"): os.makedirs("comprovantes")
-    path = os.path.join("comprovantes", file.name)
-    with open(path, "wb") as f: f.write(file.getbuffer())
-    return path
+    paths = []
+    for file in files:
+        path = os.path.join("comprovantes", f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{file.name}")
+        with open(path, "wb") as f: f.write(file.getbuffer())
+        paths.append(path)
+    return ";".join(paths)
 
 def gerar_relatorio_pdf(dados, nome_arquivo):
-    doc = SimpleDocTemplate(nome_arquivo, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=18)
+    doc = SimpleDocTemplate(nome_arquivo, pagesize=letter, rightMargin=40, leftMargin=40, topMargin=40, bottomMargin=30)
     styles = getSampleStyleSheet()
     elements = []
-    title_style = ParagraphStyle('TitleStyle', parent=styles['Title'], fontSize=18, textColor=colors.HexColor("#1f4e79"), alignment=1, spaceAfter=20)
-    elements.append(Paragraph("RELATÓRIO DE REEMBOLSO OFICIAL - GLOBUS", title_style))
-    elements.append(Spacer(1, 10))
+    
+    # Cores Globus
+    cor_primaria = colors.HexColor("#1f4e79")
+    cor_fundo = colors.HexColor("#f4f7f9")
+
+    # Estilos Customizados
+    style_header = ParagraphStyle('Header', parent=styles['Normal'], fontSize=20, textColor=cor_primaria, alignment=1, spaceAfter=10, fontName='Helvetica-Bold')
+    style_label = ParagraphStyle('Label', parent=styles['Normal'], fontSize=9, textColor=colors.grey, fontName='Helvetica-Bold')
+    style_value = ParagraphStyle('Value', parent=styles['Normal'], fontSize=11, textColor=colors.black)
+
+    # Título e Linha Decorativa
+    elements.append(Paragraph("RELATÓRIO DE REEMBOLSO", style_header))
+    elements.append(HRFlowable(width="100%", thickness=2, color=cor_primaria, spaceAfter=20))
+
+    # Tabela de Informações Gerais
     info_data = [
-        [Paragraph("<b>ID SOLICITAÇÃO:</b>", styles['Normal']), f"#{dados['id']}", Paragraph("<b>COLABORADOR:</b>", styles['Normal']), dados['Colaborador']],
-        [Paragraph("<b>STATUS:</b>", styles['Normal']), dados['Status'], Paragraph("<b>APROVADOR:</b>", styles['Normal']), "GABRIEL COELHO"]
+        [Paragraph("COLABORADOR", style_label), Paragraph("ID SOLICITAÇÃO", style_label), Paragraph("STATUS", style_label)],
+        [Paragraph(dados['Colaborador'], style_value), Paragraph(f"#{dados['id']}", style_value), Paragraph(dados['Status'].upper(), style_value)],
+        [Spacer(1, 10), Spacer(1, 10), Spacer(1, 10)],
+        [Paragraph("DATA DE EMISSÃO", style_label), Paragraph("APROVADOR", style_label), ""] ,
+        [Paragraph(datetime.now().strftime("%d/%m/%Y"), style_value), Paragraph("GABRIEL COELHO", style_value), ""]
     ]
-    t_info = Table(info_data, colWidths=[1.2*inch, 2.5*inch, 1*inch, 1.8*inch])
-    t_info.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 0.5, colors.grey), ('VALIGN', (0,0), (-1,-1), 'MIDDLE'), ('BACKGROUND', (0,0), (0,-1), colors.whitesmoke)]))
+    
+    t_info = Table(info_data, colWidths=[2.5*inch, 2*inch, 2*inch])
+    t_info.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 8),
+    ]))
     elements.append(t_info)
     elements.append(Spacer(1, 20))
-    
-    despesas_data = [["DATA", "CATEGORIA", "VALOR (R$)", "MOTIVO"]]
+
+    # Tabela de Itens
+    despesas_data = [["DATA", "CATEGORIA", "MOTIVO / JUSTIFICATIVA", "VALOR"]]
     total_geral = 0
     for item in dados['Detalhes']:
-        despesas_data.append([item.get('data', dados['Data']), item['categoria'], formatar_moeda(item['valor']), item['motivo']])
+        despesas_data.append([
+            item.get('data', dados['Data']), 
+            item['categoria'], 
+            Paragraph(item['motivo'], styles['Normal']), 
+            formatar_moeda(item['valor'])
+        ])
         total_geral += item['valor']
     
-    despesas_data.append(["", "TOTAL A REEMBOLSAR", formatar_moeda(total_geral), ""])
-    t_desp = Table(despesas_data, colWidths=[0.9*inch, 2.0*inch, 1.1*inch, 2.5*inch])
-    t_desp.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor("#1f4e79")), ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke), ('GRID', (0,0), (-1,-1), 0.5, colors.grey), ('ALIGN', (2,1), (2,-1), 'RIGHT')]))
+    t_desp = Table(despesas_data, colWidths=[0.9*inch, 1.8*inch, 3.2*inch, 1.1*inch])
+    t_desp.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), cor_primaria),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+        ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+        ('ALIGN', (-1,0), (-1,-1), 'RIGHT'),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,0), 10),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('TOPPADDING', (0,0), (-1,-1), 8),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 8),
+    ]))
     elements.append(t_desp)
-    
+
+    # Totalizador
+    total_data = [["", "TOTAL A RECEBER:", formatar_moeda(total_geral)]]
+    t_total = Table(total_data, colWidths=[2.7*inch, 3.2*inch, 1.1*inch])
+    t_total.setStyle(TableStyle([
+        ('ALIGN', (1,0), (1,0), 'RIGHT'),
+        ('ALIGN', (2,0), (2,0), 'RIGHT'),
+        ('FONTNAME', (1,0), (2,0), 'Helvetica-Bold'),
+        ('FONTSIZE', (1,0), (2,0), 12),
+        ('TEXTCOLOR', (2,0), (2,0), cor_primaria),
+        ('TOPPADDING', (0,0), (-1,-1), 10),
+    ]))
+    elements.append(t_total)
+
+    # Observações
     if dados.get('Comentario'):
-        elements.append(Spacer(1, 20))
-        elements.append(Paragraph(f"<b>OBSERVAÇÕES:</b>", styles['Normal']))
+        elements.append(Spacer(1, 30))
+        elements.append(Paragraph("OBSERVAÇÕES DO FINANCEIRO", style_label))
+        elements.append(HRFlowable(width="30%", thickness=1, color=colors.lightgrey, align='LEFT'))
+        elements.append(Spacer(1, 5))
         elements.append(Paragraph(dados['Comentario'], styles['Normal']))
+
     doc.build(elements)
 
 def gerar_relatorio_mensal_pdf(lista_solicitacoes, mes_ano, nome_arquivo):
     doc = SimpleDocTemplate(nome_arquivo, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=40, bottomMargin=30)
     styles = getSampleStyleSheet()
     elements = []
-    title_style = ParagraphStyle('TitleStyle', parent=styles['Title'], fontSize=20, textColor=colors.HexColor("#1f4e79"), alignment=1, spaceAfter=10)
-    subtitle_style = ParagraphStyle('SubStyle', parent=styles['Normal'], fontSize=12, alignment=1, spaceAfter=20)
-    header_table = TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#1f4e79")),
-        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
-        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
-        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-    ])
-
+    cor_primaria = colors.HexColor("#1f4e79")
+    
+    title_style = ParagraphStyle('TitleStyle', parent=styles['Title'], fontSize=18, textColor=cor_primaria, alignment=1)
+    
     elements.append(Paragraph("FECHAMENTO MENSAL DE REEMBOLSOS", title_style))
-    elements.append(Paragraph(f"Período de Referência: {mes_ano} | Empresa: Globus Seguros", subtitle_style))
-    elements.append(Spacer(1, 10))
+    elements.append(Paragraph(f"Período: {mes_ano} | Globus Seguros", ParagraphStyle('Sub', alignment=1, spaceAfter=20)))
 
-    data_table = [["COLABORADOR", "CATEGORIA", "DATA", "VALOR (R$)"]]
+    data_table = [["COLABORADOR", "CATEGORIA", "DATA", "VALOR"]]
     total_periodo = 0
     gastos_por_colab = {}
 
@@ -233,22 +287,28 @@ def gerar_relatorio_mensal_pdf(lista_solicitacoes, mes_ano, nome_arquivo):
             total_periodo += item['valor']
             gastos_por_colab[colab] += item['valor']
 
-    t = Table(data_table, colWidths=[2*inch, 2.5*inch, 1*inch, 1.5*inch])
-    t.setStyle(header_table)
+    t = Table(data_table, colWidths=[2*inch, 2.3*inch, 1.2*inch, 1.5*inch])
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), cor_primaria),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+        ('ALIGN', (-1,0), (-1,-1), 'RIGHT')
+    ]))
     elements.append(t)
-    elements.append(Spacer(1, 25))
-
-    elements.append(Paragraph("<b>RESUMO DE GASTOS POR COLABORADOR:</b>", styles['Normal']))
-    resumo_data = [["COLABORADOR", "TOTAL ACUMULADO"]]
+    
+    elements.append(Spacer(1, 30))
+    elements.append(Paragraph("<b>RESUMO POR COLABORADOR</b>", styles['Normal']))
+    
+    resumo_data = [["COLABORADOR", "TOTAL"]]
     for c, v in gastos_por_colab.items():
         resumo_data.append([c, formatar_moeda(v)])
-    resumo_data.append([Paragraph("<b>TOTAL GERAL DO MÊS</b>", styles['Normal']), Paragraph(f"<b>{formatar_moeda(total_periodo)}</b>", styles['Normal'])])
+    resumo_data.append(["TOTAL GERAL", formatar_moeda(total_periodo)])
     
-    t_res = Table(resumo_data, colWidths=[3.5*inch, 3*inch])
+    t_res = Table(resumo_data, colWidths=[4*inch, 3*inch])
     t_res.setStyle(TableStyle([
         ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
         ('BACKGROUND', (0,-1), (-1,-1), colors.whitesmoke),
-        ('ALIGN', (1,0), (1,-1), 'RIGHT')
+        ('FONTNAME', (0,-1), (-1,-1), 'Helvetica-Bold')
     ]))
     elements.append(t_res)
     doc.build(elements)
@@ -293,12 +353,13 @@ with aba_colab:
         st.session_state.items_reembolso.append({"categoria": CATEGORIAS[0], "valor": None, "motivo": "", "data": datetime.now()})
         st.rerun()
         
-    arquivo = st.file_uploader("Anexar Comprovante (Obrigatório)", type=['pdf', 'png', 'jpg'])
+    arquivos = st.file_uploader("Anexar Comprovantes (Obrigatório)", type=['pdf', 'png', 'jpg'], accept_multiple_files=True)
+    
     if st.button("Enviar para Verificação"):
         todos_motivos_preenchidos = all(it['motivo'].strip() != "" for it in st.session_state.items_reembolso)
         
-        if nome and arquivo and any(it['valor'] and it['valor'] > 0 for it in st.session_state.items_reembolso) and todos_motivos_preenchidos:
-            path = salvar_arquivo_local(arquivo)
+        if nome and arquivos and any(it['valor'] and it['valor'] > 0 for it in st.session_state.items_reembolso) and todos_motivos_preenchidos:
+            caminhos = salvar_arquivos_locais(arquivos)
             detalhes_limpos = []
             for it in st.session_state.items_reembolso:
                 d = it.copy()
@@ -311,7 +372,7 @@ with aba_colab:
                 "Data": datetime.now().strftime("%d/%m/%Y"), 
                 "Detalhes": detalhes_limpos, 
                 "Status": "Em Verificação", 
-                "CaminhoArquivo": path, 
+                "CaminhoArquivo": caminhos, 
                 "Comentario": ""
             }
             st.session_state.db.append(nova_solic)
@@ -322,8 +383,10 @@ with aba_colab:
         else:
             if not todos_motivos_preenchidos:
                 st.error("Por favor, preencha o Motivo/Justificativa para todos os itens.")
+            elif not arquivos:
+                st.error("Por favor, anexe ao menos um comprovante.")
             else:
-                st.error("Preencha todos os campos e anexe o comprovante.")
+                st.error("Preencha todos os campos corretamente.")
 
 with aba_admin:
     st.header("Painel de Controle - Gabriel Coelho")
@@ -337,7 +400,6 @@ with aba_admin:
         meses_map = {"Janeiro":"01", "Fevereiro":"02", "Março":"03", "Abril":"04", "Maio":"05", "Junho":"06", "Julho":"07", "Agosto":"08", "Setembro":"09", "Outubro":"10", "Novembro":"11", "Dezembro":"12"}
         filtro_mes_ano = f"{meses_map[mes_ref]}/{ano_ref}"
         
-        # Filtra considerando a data de cada item
         solicitacoes_mes = []
         for s in st.session_state.db:
             if s['Status'] == "Aprovado":
@@ -386,7 +448,9 @@ with aba_admin:
                         st.success(f"Solicitação #{solic['id']} finalizada!")
                         st.rerun()
                 with c_view:
-                    if os.path.exists(solic['CaminhoArquivo']):
-                        with open(solic['CaminhoArquivo'], "rb") as f:
-                            st.download_button(label="📂 Baixar Comprovante", data=f, file_name=os.path.basename(solic['CaminhoArquivo']), key=f"dl_{idx}")
+                    st.write("📂 **Comprovantes Anexados:**")
+                    for path in solic['CaminhoArquivo'].split(";"):
+                        if os.path.exists(path):
+                            with open(path, "rb") as f:
+                                st.download_button(label=f"Baixar {os.path.basename(path)}", data=f, file_name=os.path.basename(path), key=f"dl_{path}_{idx}")
     elif senha_adm != "": st.error("Senha incorreta.")
