@@ -111,7 +111,7 @@ def enviar_aviso_ao_gabriel(solicitacao):
     - Colaborador: {solicitacao['Colaborador']}
     - Data do Envio: {datetime.now().strftime('%d/%m/%Y')}
     
-    Por favor, acesse o portal para verificar, ajustar e aprovar a solicitação:
+    Por favor, acesse o portal para verificar, ajustar e aprovar a solicitação na aba de Verificação:
     https://reembolsodespesas.streamlit.app/
     A senha para acesso é: globus2026
     """
@@ -333,7 +333,7 @@ with aba_colab:
             st.rerun()
             
     col_reset, col_add = st.columns([1, 4])
-    if col_reset.button("🔄 Resetar Tudo"):
+    if col_reset.button("🔄 Resetar Formulário"):
         st.session_state.items_reembolso = [{"categoria": CATEGORIAS[0], "valor": None, "motivo": "", "data": datetime.now()}]
         st.rerun()
 
@@ -354,7 +354,7 @@ with aba_colab:
                 detalhes_limpos.append(d)
                 
             nova_solic = {
-                "id": len(carregar_dados_iniciais()) + 1, # Busca ID real no Excel
+                "id": len(carregar_dados_iniciais()) + 1,
                 "Colaborador": nome, 
                 "Data": datetime.now().strftime("%d/%m/%Y"), 
                 "Detalhes": detalhes_limpos, 
@@ -362,7 +362,6 @@ with aba_colab:
                 "CaminhoArquivo": caminhos, 
                 "Comentario": ""
             }
-            # Adiciona ao DB da sessão e salva no Excel
             st.session_state.db = carregar_dados_iniciais()
             st.session_state.db.append(nova_solic)
             atualizar_excel()
@@ -376,11 +375,9 @@ with aba_admin:
     st.header("Painel de Controle - Gabriel Coelho")
     senha_adm = st.text_input("Senha de Acesso", type="password")
     if senha_adm == "globus2026":
-        # BOTÃO DE ATUALIZAÇÃO MANUAL (Caso o Gabriel já esteja na aba)
-        if st.button("🔄 Sincronizar Novos Dados"):
-            st.session_state.db = carregar_dados_iniciais()
-            st.rerun()
-
+        # Sincronização automática ao entrar na aba
+        st.session_state.db = carregar_dados_iniciais()
+        
         st.subheader("📊 Relatórios e Fechamento Mensal")
         col_m1, col_m2 = st.columns([1, 2])
         opcoes_meses = ["Todos", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
@@ -388,7 +385,6 @@ with aba_admin:
         ano_ref = col_m2.selectbox("Ano", [2025, 2026, 2027])
         
         if st.button("📄 GERAR PDF DE FECHAMENTO MENSAL"):
-            st.session_state.db = carregar_dados_iniciais() # Garante que pega os aprovados recentes
             solicitacoes_mes = [s for s in st.session_state.db if s['Status'] == "Aprovado"]
             if solicitacoes_mes:
                 nome_pdf_mensal = f"Fechamento_{mes_ref}_{ano_ref}.pdf"
@@ -400,13 +396,10 @@ with aba_admin:
 
         st.markdown("---")
         st.subheader("⏳ Solicitações Pendentes")
-        
-        # Recarregar DB para garantir que o Gabriel veja o que acabou de chegar
-        st.session_state.db = carregar_dados_iniciais()
         verificar = [s for s in st.session_state.db if s['Status'] == "Em Verificação"]
         
         if not verificar:
-            st.info("Nenhuma solicitação pendente no momento.")
+            st.info("Não há solicitações aguardando aprovação.")
 
         for idx, solic in enumerate(verificar):
             with st.expander(f"ID {solic['id']} - {solic['Colaborador']}"):
@@ -422,7 +415,7 @@ with aba_admin:
                     decisao = st.radio("Sua Decisão", ["Aprovado", "Reprovado"], key=f"dec_{idx}", horizontal=True)
                     motivo_final = st.text_area("Justificativa", key=f"com_{idx}")
                     
-                    col_fin, col_del_pdf = st.columns([1, 1])
+                    col_fin, col_res = st.columns([1, 1])
                     if col_fin.button("FINALIZAR", key=f"fin_{idx}"):
                         solic['Status'] = decisao
                         solic['Comentario'] = motivo_final
@@ -433,10 +426,11 @@ with aba_admin:
                         st.success(f"Solicitação #{solic['id']} finalizada!")
                         st.rerun()
                     
-                    if col_del_pdf.button("🗑️ Resetar/Apagar Solicitação", key=f"reset_pdf_{idx}", help="Remove este registro do sistema"):
+                    # Botão Resetar PDF / Registro (conforme pedido)
+                    if col_res.button("🗑️ Resetar/Apagar Solicitação", key=f"res_admin_{idx}", help="Remove este registro se algo foi enviado errado"):
                         st.session_state.db = [s for s in st.session_state.db if s['id'] != solic['id']]
                         atualizar_excel()
-                        st.warning("Solicitação removida com sucesso.")
+                        st.warning("Registro removido.")
                         st.rerun()
 
                 with c_view:
