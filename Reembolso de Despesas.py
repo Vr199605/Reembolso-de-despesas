@@ -45,6 +45,7 @@ def formatar_moeda(valor):
 def atualizar_excel():
     """Salva o estado atual do db no arquivo Excel para permanência de dados"""
     todos_itens = []
+    # Usamos o db da session_state para salvar
     for solic in st.session_state.db:
         for item in solic['Detalhes']:
             todos_itens.append({
@@ -249,9 +250,9 @@ def gerar_relatorio_mensal_pdf(lista_solicitacoes, mes_ano, nome_arquivo):
     elements.append(t_res)
     doc.build(elements)
 
-# --- INICIALIZAÇÃO DE DADOS (FORA DAS ABAS PARA GARANTIR SINCRONIA) ---
-st.session_state.db = carregar_dados_iniciais()
-
+# --- INICIALIZAÇÃO DE DADOS ---
+if 'db' not in st.session_state: 
+    st.session_state.db = carregar_dados_iniciais()
 if 'items_reembolso' not in st.session_state: 
     st.session_state.items_reembolso = [{"categoria": CATEGORIAS[0], "valor": None, "motivo": "", "data": datetime.now()}]
 
@@ -356,7 +357,7 @@ with aba_colab:
                 detalhes_limpos.append(d)
                 
             nova_solic = {
-                "id": len(st.session_state.db) + 1,
+                "id": len(carregar_dados_iniciais()) + 1,
                 "Colaborador": nome, 
                 "Data": datetime.now().strftime("%d/%m/%Y"), 
                 "Detalhes": detalhes_limpos, 
@@ -364,8 +365,12 @@ with aba_colab:
                 "CaminhoArquivo": caminhos, 
                 "Comentario": ""
             }
-            st.session_state.db.append(nova_solic)
+            # Garante que salva no excel físico
+            temp_db = carregar_dados_iniciais()
+            temp_db.append(nova_solic)
+            st.session_state.db = temp_db
             atualizar_excel()
+            
             enviar_aviso_ao_gabriel(nova_solic)
             st.session_state.items_reembolso = [{"categoria": CATEGORIAS[0], "valor": None, "motivo": "", "data": datetime.now()}]
             st.success("Enviado! Gabriel Coelho recebeu um e-mail para verificar.")
@@ -377,6 +382,9 @@ with aba_admin:
     st.header("Painel de Controle - Gabriel Coelho")
     senha_adm = st.text_input("Senha de Acesso", type="password")
     if senha_adm == "globus2026":
+        
+        # O PONTO CHAVE: Forçamos o carregamento do Excel sempre que ele acessa a aba
+        st.session_state.db = carregar_dados_iniciais()
         
         st.subheader("📊 Relatórios e Fechamento Mensal")
         col_m1, col_m2 = st.columns([1, 2])
@@ -397,11 +405,11 @@ with aba_admin:
         st.markdown("---")
         st.subheader("⏳ Solicitações Pendentes")
         
-        # Filtra apenas o que está em verificação
+        # Filtramos o que foi carregado do Excel
         verificar = [s for s in st.session_state.db if s['Status'] == "Em Verificação"]
         
         if not verificar:
-            st.info("Não há solicitações aguardando aprovação.")
+            st.info("Não há solicitações aguardando aprovação no momento.")
 
         for idx, solic in enumerate(verificar):
             with st.expander(f"ID {solic['id']} - {solic['Colaborador']}"):
@@ -415,29 +423,35 @@ with aba_admin:
                         item['motivo'] = ec3.text_input(f"Motivo", value=item['motivo'], key=f"adm_m_{idx}_{i_item}")
                     
                     decisao = st.radio("Sua Decisão", ["Aprovado", "Reprovado"], key=f"dec_{idx}", horizontal=True)
-                    motivo_final = st.text_area("Justificativa", key=f"com_{idx}")
+                    motivo_final = st.text_area("Justificativa/Comentário", key=f"com_{idx}")
                     
                     col_fin, col_res = st.columns([1, 1])
                     if col_fin.button("FINALIZAR", key=f"fin_{idx}"):
+                        # Atualiza o status no objeto da solicitação
                         solic['Status'] = decisao
                         solic['Comentario'] = motivo_final
+                        # Salva a alteração no Excel
                         atualizar_excel()
+                        
                         nome_pdf = f"Relatorio_ID_{solic['id']}.pdf"
                         gerar_relatorio_pdf(solic, nome_pdf)
                         enviar_email_automatico(solic, nome_pdf, solic['CaminhoArquivo'])
-                        st.success(f"Solicitação #{solic['id']} finalizada!")
+                        st.success(f"Solicitação #{solic['id']} finalizada com sucesso!")
                         st.rerun()
                     
-                    if col_res.button("🗑️ Resetar/Apagar Solicitação", key=f"res_admin_{idx}"):
+                    if col_res.button("🗑️ Apagar Registro", key=f"res_admin_{idx}"):
                         st.session_state.db = [s for s in st.session_state.db if s['id'] != solic['id']]
                         atualizar_excel()
-                        st.warning("Registro removido.")
+                        st.warning("Registro removido do sistema.")
                         st.rerun()
 
                 with c_view:
-                    st.write("📂 **Comprovantes:**")
+                    st.write("📂 **Comprovantes Anexados:**")
                     for path in solic['CaminhoArquivo'].split(";"):
                         if os.path.exists(path):
                             with open(path, "rb") as f:
                                 st.download_button(label=f"Baixar {os.path.basename(path)}", data=f, file_name=os.path.basename(path), key=f"dl_{path}_{idx}")
-    elif senha_adm != "": st.error("Senha incorreta.")
+                        else:
+                            st.error(f"Arquivo não encontrado: {os.path.basename(path)}")
+    elif senha_adm != "": 
+        st.error("Senha incorreta.")
