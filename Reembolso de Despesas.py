@@ -228,7 +228,7 @@ with aba_colab:
         else:
             item['valor'] = col2.number_input(f"Valor R$", min_value=0.0, step=0.01, format="%.2f", value=None, key=f"val_{i}")
             if item['valor'] and item['categoria'] in LIMITES and item['valor'] > LIMITES[item['categoria']]:
-                col2.warning(f"O limite para {item['categoria']} é de {formatar_moeda(LIMITES[item['categoria']]).replace('$', '$ ')}. O reembolso será processado até este teto; valores excedentes não serão contemplados.")
+                col2.warning(f"O limite para {item['categoria']} é de R$ {LIMITES[item['categoria']]},00. O reembolso será processado até este teto; valores excedentes não serão contemplados.")
         item['motivo'] = col3.text_input(f"Motivo / Justificativa", key=f"mot_{i}")
         if col4.button("🗑️", key=f"del_{i}"):
             st.session_state.items_reembolso.pop(i)
