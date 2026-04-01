@@ -342,9 +342,11 @@ with aba_admin:
     st.header("Painel de Controle - Gabriel Coelho")
     senha_adm = st.text_input("Senha de Acesso", type="password")
     if senha_adm == "globus2026":
+        # RECARREGA OS DADOS PARA GARANTIR QUE OS NOVOS ENVIOS APAREÇAM
         st.session_state.db = carregar_dados_iniciais()
         
         st.subheader("⏳ Solicitações Pendentes")
+        # GARANTE QUE FILTRAMOS DO ESTADO MAIS RECENTE
         verificar = [s for s in st.session_state.db if s['Status'] == "Em Verificação"]
         
         if not verificar:
@@ -355,6 +357,7 @@ with aba_admin:
                 c_edit, c_view = st.columns([1.5, 1])
                 with c_edit:
                     st.write("📝 **Ajustar e Processar:**")
+                    # LOOP PELOS DETALHES PARA PERMITIR AJUSTE
                     for i_item, item in enumerate(solic['Detalhes']):
                         ec0, ec1, ec2, ec3 = st.columns([1, 1.5, 1, 1.5])
                         item['data'] = ec0.text_input(f"Data", value=item.get('data', solic['Data']), key=f"adm_d_{idx}_{i_item}")
@@ -372,7 +375,6 @@ with aba_admin:
                         nome_pdf = f"Relatorio_ID_{solic['id']}.pdf"
                         gerar_relatorio_pdf(solic, nome_pdf)
                         
-                        # Envia o e-mail automático com o PDF e os arquivos de upload
                         enviar_email_automatico(solic, nome_pdf, solic['CaminhoArquivo'])
                         
                         st.success(f"Solicitação #{solic['id']} finalizada e enviada por e-mail!")
