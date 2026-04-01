@@ -360,7 +360,7 @@ with aba_guia:
     st.info("💡 Assim que você clicar em 'Enviar', o Gabriel Coelho receberá uma notificação imediata para análise.")
 
 with aba_colab:
-    st.header("Nova Solicitação")
+    st.header("Formulário de Reembolso - Globus")
     nome = st.text_input("Nome Completo")
     st.info("💡 Observação: Em caso de Almoço com Cliente, favor utilizar a categoria 'OUTROS* (em R$)'")
     st.markdown("---")
