@@ -309,7 +309,7 @@ with aba_guia:
 
 with aba_colab:
     st.header("Formulário de Reembolso - Globus")
-    nome = st.text_input("Nome Completo")
+    nome = st.text_input("Nome Completo", key="input_nome")
     st.markdown("---")
     for i, item in enumerate(st.session_state.items_reembolso):
         col_data, col_cat, col_val, col_mot, col_del = st.columns([1.2, 1.8, 1.2, 1.8, 0.4])
@@ -333,9 +333,15 @@ with aba_colab:
             st.session_state.items_reembolso.pop(i)
             st.rerun()
             
-    if st.button("➕ Adicionar Outro Item"):
-        st.session_state.items_reembolso.append({"categoria": CATEGORIAS[0], "valor": None, "motivo": "", "data": datetime.now()})
-        st.rerun()
+    col_acoes_1, col_acoes_2 = st.columns([1, 1])
+    with col_acoes_1:
+        if st.button("➕ Adicionar Outro Item"):
+            st.session_state.items_reembolso.append({"categoria": CATEGORIAS[0], "valor": None, "motivo": "", "data": datetime.now()})
+            st.rerun()
+    with col_acoes_2:
+        if st.button("🔄 Resetar Formulário", help="Apaga todos os campos preenchidos acima"):
+            st.session_state.items_reembolso = [{"categoria": CATEGORIAS[0], "valor": None, "motivo": "", "data": datetime.now()}]
+            st.rerun()
         
     arquivos = st.file_uploader("Anexar Comprovantes (Obrigatório)", type=['pdf', 'png', 'jpg'], accept_multiple_files=True)
     
@@ -403,15 +409,25 @@ with aba_admin:
                     decisao = st.radio("Sua Decisão", ["Aprovado", "Reprovado"], key=f"dec_{idx}", horizontal=True)
                     motivo_final = st.text_area("Justificativa", key=f"com_{idx}")
                     
-                    if st.button("FINALIZAR", key=f"fin_{idx}"):
-                        solic['Status'] = decisao
-                        solic['Comentario'] = motivo_final
-                        atualizar_excel()
-                        nome_pdf = f"Relatorio_ID_{solic['id']}.pdf"
-                        gerar_relatorio_pdf(solic, nome_pdf)
-                        enviar_email_automatico(solic, nome_pdf, solic['CaminhoArquivo'])
-                        st.success(f"Solicitação #{solic['id']} finalizada!")
-                        st.rerun()
+                    col_b1, col_b2 = st.columns([1, 1])
+                    with col_b1:
+                        if st.button("FINALIZAR", key=f"fin_{idx}"):
+                            solic['Status'] = decisao
+                            solic['Comentario'] = motivo_final
+                            atualizar_excel()
+                            nome_pdf = f"Relatorio_ID_{solic['id']}.pdf"
+                            gerar_relatorio_pdf(solic, nome_pdf)
+                            enviar_email_automatico(solic, nome_pdf, solic['CaminhoArquivo'])
+                            st.success(f"Solicitação #{solic['id']} finalizada!")
+                            st.rerun()
+                    with col_b2:
+                        if st.button("🗑️ EXCLUIR REGISTRO", key=f"exc_{idx}", help="Remove permanentemente esta solicitação (útil para testes ou erros)"):
+                            # Remove o item da lista principal por ID
+                            st.session_state.db = [s for s in st.session_state.db if s['id'] != solic['id']]
+                            atualizar_excel()
+                            st.warning(f"Solicitação #{solic['id']} removida!")
+                            st.rerun()
+
                 with c_view:
                     st.write("📂 **Comprovantes:**")
                     for path in solic['CaminhoArquivo'].split(";"):
