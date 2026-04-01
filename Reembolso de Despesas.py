@@ -451,14 +451,23 @@ with aba_admin:
                     s_copy['Detalhes'] = itens_no_mes
                     solicitacoes_mes.append(s_copy)
         
-        if st.button("📄 GERAR PDF DE FECHAMENTO MENSAL"):
-            if solicitacoes_mes:
-                nome_pdf_mensal = f"Fechamento_{mes_ref}_{ano_ref}.pdf"
-                gerar_relatorio_mensal_pdf(solicitacoes_mes, f"{mes_ref}/{ano_ref}", nome_pdf_mensal)
-                with open(nome_pdf_mensal, "rb") as f:
-                    st.download_button("📥 Baixar Relatório Mensal", f, file_name=nome_pdf_mensal)
-            else:
-                st.warning(f"Não existem despesas 'Aprovadas' para {mes_ref}/{ano_ref}.")
+        col_rel_1, col_rel_2 = st.columns([1, 1])
+        with col_rel_1:
+            if st.button("📄 GERAR PDF DE FECHAMENTO MENSAL"):
+                if solicitacoes_mes:
+                    nome_pdf_mensal = f"Fechamento_{mes_ref}_{ano_ref}.pdf"
+                    gerar_relatorio_mensal_pdf(solicitacoes_mes, f"{mes_ref}/{ano_ref}", nome_pdf_mensal)
+                    with open(nome_pdf_mensal, "rb") as f:
+                        st.download_button("📥 Baixar Relatório Mensal", f, file_name=nome_pdf_mensal)
+                else:
+                    st.warning(f"Não existem despesas 'Aprovadas' para {mes_ref}/{ano_ref}.")
+        
+        with col_rel_2:
+            if st.button("🗑️ Resetar Banco de Dados (PDFs)"):
+                st.session_state.db = []
+                pd.DataFrame().to_excel(ARQUIVO_EXCEL, index=False)
+                st.success("Banco de dados resetado com sucesso para novos testes!")
+                st.rerun()
         
         st.markdown("---")
         st.subheader("⏳ Solicitações Pendentes")
