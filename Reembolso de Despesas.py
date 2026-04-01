@@ -95,7 +95,8 @@ def enviar_aviso_ao_gabriel(solicitacao):
     msg['From'] = remetente
     msg['To'] = destinatario
     msg['Subject'] = f"📩 Nova Solicitação de Reembolso: {solicitacao['Colaborador']}"
-    corpo = f"Olá Gabriel Coelho,\n\nUma nova solicitação foi enviada.\nColaborador: {solicitacao['Colaborador']}\nLink: https://reembolsodespesas.streamlit.app/"
+    # Link atualizado para incluir contexto visual no e-mail
+    corpo = f"Olá Gabriel Coelho,\n\nUma nova solicitação foi enviada e está aguardando sua conferência e possíveis ajustes.\n\nColaborador: {solicitacao['Colaborador']}\nID: {solicitacao['id']}\nLink para aprovação: https://reembolsodespesas.streamlit.app/"
     msg.attach(MIMEText(corpo, 'plain'))
     try:
         server = smtplib.SMTP('smtp.gmail.com', 587)
@@ -138,14 +139,12 @@ def salvar_arquivo_local(file):
     return path
 
 def gerar_relatorio_pdf(dados, nome_arquivo):
-    # Margens ajustadas para evitar cortes
     doc = SimpleDocTemplate(nome_arquivo, pagesize=letter, rightMargin=40, leftMargin=40, topMargin=50, bottomMargin=50)
     styles = getSampleStyleSheet()
     elements = []
     
     azul_globus = colors.HexColor("#1f4e79")
     
-    # Estilos de parágrafo para dentro das células (FORÇA A QUEBRA DE LINHA)
     style_tit = ParagraphStyle('Tit', parent=styles['Title'], fontSize=22, textColor=azul_globus, spaceAfter=20, fontName='Helvetica-Bold')
     style_label = ParagraphStyle('Lab', parent=styles['Normal'], fontSize=10, fontName='Helvetica-Bold', textColor=azul_globus)
     style_header_tab = ParagraphStyle('HTab', parent=styles['Normal'], fontSize=10, fontName='Helvetica-Bold', textColor=colors.whitesmoke, alignment=1)
@@ -154,7 +153,6 @@ def gerar_relatorio_pdf(dados, nome_arquivo):
     elements.append(Paragraph("RELATÓRIO DE REEMBOLSO", style_tit))
     elements.append(Paragraph("<b>GLOBUS SEGUROS</b>", ParagraphStyle('Sub', parent=styles['Normal'], fontSize=12, alignment=1, spaceAfter=30)))
     
-    # Tabela de Informações Gerais
     info = [
         [Paragraph("ID SOLICITAÇÃO", style_label), f"#{dados['id']}", Paragraph("DATA EMISSÃO", style_label), datetime.now().strftime('%d/%m/%Y')],
         [Paragraph("COLABORADOR", style_label), dados['Colaborador'], Paragraph("STATUS", style_label), dados['Status'].upper()]
@@ -168,8 +166,6 @@ def gerar_relatorio_pdf(dados, nome_arquivo):
     elements.append(t_info)
     elements.append(Spacer(1, 25))
 
-    # Tabela de Despesas - CORREÇÃO DE SOBREPOSIÇÃO
-    # Usamos Paragraph em CATEGORIA e MOTIVO para que o texto quebre se for grande
     items_data = [[
         Paragraph("DATA", style_header_tab), 
         Paragraph("CATEGORIA", style_header_tab), 
@@ -187,14 +183,12 @@ def gerar_relatorio_pdf(dados, nome_arquivo):
         ])
         total_reembolso += it['valor']
     
-    # Linha de Total
     items_data.append([
         "", "", 
         Paragraph("<b>TOTAL A REEMBOLSAR</b>", ParagraphStyle('TotL', parent=style_cell, alignment=2)), 
         Paragraph(f"<b>{formatar_moeda(total_reembolso)}</b>", ParagraphStyle('TotV', parent=style_cell, alignment=2))
     ])
     
-    # Larguras fixas calculadas para preencher a folha sem sobrepor (Total 7.2 polegadas)
     t_items = Table(items_data, colWidths=[0.9*inch, 1.8*inch, 3.3*inch, 1.2*inch])
     t_items.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), azul_globus),
@@ -216,7 +210,6 @@ if 'items_reembolso' not in st.session_state:
 aba_guia, aba_colab, aba_admin = st.tabs(["📖 Guia de Preenchimento", "🚀 Solicitar Reembolso", "🔑 Verificação e Aprovação (Gabriel)"])
 
 with aba_guia:
-    # Cores dinâmicas que respeitam o tema DARK/LIGHT do Streamlit
     st.markdown("""
     <style>
         .guia-container {
@@ -267,7 +260,8 @@ with aba_guia:
     st.markdown('</div>', unsafe_allow_html=True)
     
     st.markdown("---")
-    st.write("Caso ainda tenha alguma dúvida segue abaixo o manual de politicas de viagens e reembolso.")
+    # TEXTO ADICIONADO CONFORME PEDIDO
+    st.write("caso ainda tenha alguma dúvida segue abaixo o manual de politicas de viagens e reembolso.")
     caminho_manual = os.path.join("documentos", "manual_reembolso.pdf")
     if os.path.exists(caminho_manual):
         with open(caminho_manual, "rb") as f:
@@ -276,7 +270,6 @@ with aba_guia:
 with aba_colab:
     st.header("Solicitar Novo Reembolso")
     
-    # Botão de Reset
     if st.button("🔄 Resetar Tudo", key="btn_reset_colab"):
         st.session_state.items_reembolso = [{"categoria": CATEGORIAS[0], "valor": None, "motivo": "", "data": datetime.now()}]
         if 'nome_input' in st.session_state: st.session_state.nome_input = ""
@@ -296,6 +289,12 @@ with aba_colab:
             c3.info(f"R$ {item['valor']}")
         else:
             item['valor'] = c3.number_input(f"Valor R$", min_value=0.0, format="%.2f", value=None, key=f"vl_{i}")
+            
+            # VALIDAÇÃO DE LIMITES DE VALORES
+            if item['categoria'] == "ESTACIONAMENTO (em R$)" and item['valor'] is not None and item['valor'] > 70:
+                c3.warning("Limite: R$ 70")
+            if item['categoria'] == "REFEIÇÃO VIAGEM (em R$)" and item['valor'] is not None and item['valor'] > 150:
+                c3.warning("Limite: R$ 150")
         
         item['motivo'] = c4.text_input(f"Motivo {i+1}", key=f"mt_{i}", placeholder="Obrigatório")
         
@@ -330,10 +329,10 @@ with aba_colab:
             atualizar_excel()
             enviar_aviso_ao_gabriel(nova_solic)
             
+            # MENSAGEM DE SUCESSO CONFORME SOLICITADO
+            st.success("foi enviado para verificação")
             st.balloons()
-            st.success("✅ Enviado para análise! Após aprovado, o prazo de pagamento é D+5.")
             
-            # Resetar campos após o envio com sucesso
             st.session_state.items_reembolso = [{"categoria": CATEGORIAS[0], "valor": None, "motivo": "", "data": datetime.now()}]
             st.rerun()
         else:
@@ -352,13 +351,30 @@ with aba_admin:
             
         for idx, solic in enumerate(pendentes):
             with st.expander(f"📦 ID #{solic['id']} - {solic['Colaborador']}"):
+                st.write(f"**Data da Solicitação:** {solic['Data']}")
+                
+                # ÁREA DE AJUSTES PELO GABRIEL
+                st.markdown("---")
+                st.subheader("📝 Revisão e Ajustes")
+                
+                novos_detalhes = []
+                for i_detalhe, item in enumerate(solic['Detalhes']):
+                    col1, col2, col3, col4 = st.columns([1, 1.5, 1, 2])
+                    nova_data = col1.text_input(f"Data item {i_detalhe+1}", value=item['data'], key=f"adj_dt_{idx}_{i_detalhe}")
+                    nova_cat = col2.selectbox(f"Categoria item {i_detalhe+1}", CATEGORIAS, index=CATEGORIAS.index(item['categoria']) if item['categoria'] in CATEGORIAS else 0, key=f"adj_cat_{idx}_{i_detalhe}")
+                    novo_val = col3.number_input(f"Valor item {i_detalhe+1}", value=float(item['valor']), key=f"adj_val_{idx}_{i_detalhe}")
+                    novo_mot = col4.text_input(f"Motivo item {i_detalhe+1}", value=item['motivo'], key=f"adj_mot_{idx}_{i_detalhe}")
+                    novos_detalhes.append({"data": nova_data, "categoria": nova_cat, "valor": novo_val, "motivo": novo_mot})
+                
+                st.markdown("---")
                 c_inf, c_img = st.columns([1, 1])
                 with c_inf:
-                    st.write(f"**Data da Solicitação:** {solic['Data']}")
                     status_sel = st.radio("Ação", ["Aprovado", "Reprovado"], key=f"rad_{idx}")
-                    obs_adm = st.text_area("Justificativa / Observação", key=f"obs_adm_{idx}")
+                    obs_adm = st.text_area("Justificativa / Observação (Enviada ao colaborador)", key=f"obs_adm_{idx}")
                     
                     if st.button("Confirmar Decisão", key=f"btn_adm_{idx}"):
+                        # Salva os ajustes feitos pelo Gabriel antes de processar
+                        solic['Detalhes'] = novos_detalhes
                         solic['Status'] = status_sel
                         solic['Comentario'] = obs_adm
                         atualizar_excel()
