@@ -290,11 +290,11 @@ with aba_guia:
     """)
     st.info("💡 Assim que você clicar em 'Enviar', o Gabriel Coelho receberá uma notificação imediata para análise. Prazo para D+5 após a aprovação.")
     
-    # --- BLOCO DE DOWNLOAD (AJUSTADO PARA A PASTA DOCUMENTOS) ---
     st.markdown("---")
     st.subheader("❓ Ainda tem dúvidas?")
     
-    caminho_manual = "documentos/manual_reembolso.pdf"
+    # Caminho ajustado para encontrar o arquivo no servidor
+    caminho_manual = os.path.join(os.getcwd(), "documentos", "manual_reembolso.pdf")
     
     if os.path.exists(caminho_manual):
         with open(caminho_manual, "rb") as f:
@@ -364,15 +364,31 @@ with aba_colab:
             st.session_state.items_reembolso = [{"categoria": CATEGORIAS[0], "valor": None, "motivo": "", "data": datetime.now()}]
             st.success("Enviado! Gabriel Coelho recebeu um e-mail para verificar.")
         else:
-            st.error("Preencha todos os campos corretamente (Nome, Comprovantes, Motivo e Valores).")
+            st.error("Preencha todos os campos corretamente.")
 
 with aba_admin:
     st.header("Painel de Controle - Gabriel Coelho")
     senha_adm = st.text_input("Senha de Acesso", type="password")
     if senha_adm == "globus2026":
+        st.subheader("📊 Relatórios e Fechamento Mensal")
+        col_m1, col_m2 = st.columns([1, 2])
+        opcoes_meses = ["Todos", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
+        mes_ref = col_m1.selectbox("Selecione o Mês", opcoes_meses)
+        ano_ref = col_m2.selectbox("Ano", [2025, 2026, 2027])
+        
+        if st.button("📄 GERAR PDF DE FECHAMENTO MENSAL"):
+            solicitacoes_mes = [s for s in st.session_state.db if s['Status'] == "Aprovado"]
+            if solicitacoes_mes:
+                nome_pdf_mensal = f"Fechamento_{mes_ref}_{ano_ref}.pdf"
+                gerar_relatorio_mensal_pdf(solicitacoes_mes, f"{mes_ref}/{ano_ref}", nome_pdf_mensal)
+                with open(nome_pdf_mensal, "rb") as f:
+                    st.download_button("📥 Baixar Relatório Mensal", f, file_name=nome_pdf_mensal)
+            else:
+                st.warning("Sem despesas aprovadas no período.")
+
+        st.markdown("---")
         st.subheader("⏳ Solicitações Pendentes")
         verificar = [s for s in st.session_state.db if s['Status'] == "Em Verificação"]
-        if not verificar: st.info("Não há solicitações pendentes.")
         for idx, solic in enumerate(verificar):
             with st.expander(f"ID {solic['id']} - {solic['Colaborador']}"):
                 c_edit, c_view = st.columns([1.5, 1])
