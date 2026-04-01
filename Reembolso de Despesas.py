@@ -320,7 +320,44 @@ if 'db' not in st.session_state:
 if 'items_reembolso' not in st.session_state: 
     st.session_state.items_reembolso = [{"categoria": CATEGORIAS[0], "valor": None, "motivo": "", "data": datetime.now()}]
 
-aba_colab, aba_admin = st.tabs(["🚀 Solicitar Reembolso", "🔑 Verificação e Aprovação (Gabriel)"])
+# --- ABA DE PASSO A PASSO (NOVA) ---
+aba_guia, aba_colab, aba_admin = st.tabs(["📖 Guia de Preenchimento", "🚀 Solicitar Reembolso", "🔑 Verificação e Aprovação (Gabriel)"])
+
+with aba_guia:
+    st.title("📖 Como solicitar seu reembolso")
+    st.markdown("""
+    Bem-vindo ao **Portal de Reembolsos Globus**. Siga o passo a passo abaixo para garantir que sua solicitação seja processada rapidamente.
+    
+    ---
+    ### 1️⃣ Identificação
+    Na aba **'Solicitar Reembolso'**, comece preenchendo seu **Nome Completo**. Isso é fundamental para a organização dos pagamentos.
+
+    ### 2️⃣ Adicionando Despesas
+    Você pode adicionar várias despesas em uma única solicitação:
+    * **Data:** Selecione a data exata em que o gasto ocorreu.
+    * **Categoria:** Escolha o tipo de despesa (ex: Estacionamento, Uber, Pedágio).
+    * **Valor:** Insira o valor conforme o comprovante.
+        * *Nota para KM:* Ao selecionar **KM¹**, insira a quantidade rodada e o sistema calculará automaticamente o valor (R$ 1,37/km).
+    * **Motivo:** Descreva brevemente o motivo do gasto (ex: 'Visita ao cliente X'). **Este campo é obrigatório.**
+
+    ### 3️⃣ Comprovantes
+    **Nenhuma despesa é aprovada sem comprovante.** * Tire fotos nítidas ou anexe os PDFs dos recibos/notas fiscais.
+    * Você pode selecionar múltiplos arquivos de uma vez.
+
+    ### 4️⃣ Limites da Política
+    Fique atento aos limites automáticos do sistema:
+    * **Refeição Viagem:** Até R$ 150,00
+    * **Estacionamento:** Até R$ 70,00
+    * **Bebida Alcoólica:** Até R$ 50,00
+    * *Gastos acima desses valores serão ajustados ao teto da política pelo aprovador.*
+
+    ---
+    ### 🛡️ Dúvidas Frequentes
+    > **Almoço com cliente?** Use a categoria **'OUTROS*'** e descreva no motivo.
+    
+    > **Esqueci o motivo?** O sistema impedirá o envio até que todos os campos de motivo estejam preenchidos.
+    """)
+    st.info("💡 Assim que você clicar em 'Enviar', o Gabriel Coelho receberá uma notificação imediata para análise.")
 
 with aba_colab:
     st.header("Nova Solicitação")
