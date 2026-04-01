@@ -356,6 +356,22 @@ with aba_guia:
     > **Esqueci o motivo?** O sistema impedirá o envio até que todos os campos de motivo estejam preenchidos.
     """)
     st.info("💡 Assim que você clicar em 'Enviar', o Gabriel Coelho receberá uma notificação imediata para análise. Prazo para D+5 após a aprovação.")
+    
+    # --- NOVO BOTÃO DE DOWNLOAD (OPÇÃO 2) ---
+    st.markdown("---")
+    st.subheader("❓ Ainda tem dúvidas?")
+    caminho_manual = "documentos/manual_reembolso.pdf"
+    
+    if os.path.exists(caminho_manual):
+        with open(caminho_manual, "rb") as f:
+            st.download_button(
+                label="📥 Clique aqui para baixar o guia detalhado em PDF",
+                data=f,
+                file_name="Guia_Reembolso_Globus.pdf",
+                mime="application/pdf"
+            )
+    else:
+        st.caption("Nota: O guia detalhado estará disponível em breve.")
 
 with aba_colab:
     st.header("Formulário de Reembolso - Globus")
@@ -434,7 +450,6 @@ with aba_admin:
         st.subheader("📊 Relatórios e Fechamento Mensal")
         col_m1, col_m2 = st.columns([1, 2])
         
-        # Filtro com opção de selecionar todos os meses
         opcoes_meses = ["Todos", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
         mes_ref = col_m1.selectbox("Selecione o Mês", opcoes_meses)
         ano_ref = col_m2.selectbox("Ano", [2025, 2026, 2027])
@@ -445,10 +460,8 @@ with aba_admin:
         for s in st.session_state.db:
             if s['Status'] == "Aprovado":
                 if mes_ref == "Todos":
-                    # Se 'Todos' for selecionado, filtra apenas pelo Ano
                     itens_no_periodo = [it for it in s['Detalhes'] if str(ano_ref) in it.get('data', s['Data'])]
                 else:
-                    # Filtro específico de Mês/Ano
                     filtro_mes_ano = f"{meses_map[mes_ref]}/{ano_ref}"
                     itens_no_periodo = [it for it in s['Detalhes'] if filtro_mes_ano in it.get('data', s['Data'])]
                 
