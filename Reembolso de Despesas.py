@@ -66,6 +66,8 @@ def carregar_dados_iniciais():
     if os.path.exists(ARQUIVO_EXCEL):
         try:
             df = pd.read_excel(ARQUIVO_EXCEL)
+            if df.empty:
+                return []
             db_recuperado = []
             for solic_id in df['ID'].unique():
                 df_solic = df[df['ID'] == solic_id]
@@ -91,7 +93,12 @@ def carregar_dados_iniciais():
             return db_recuperado
         except:
             return []
-    return []
+    else:
+        # CRIA O ARQUIVO CASO NÃO EXISTA
+        colunas = ["ID", "Colaborador", "Data_Item", "Status", "Categoria", "Valor", "Motivo", "Comentario_Admin", "Caminho_Arquivo"]
+        df_vazio = pd.DataFrame(columns=colunas)
+        df_vazio.to_excel(ARQUIVO_EXCEL, index=False)
+        return []
 
 def enviar_aviso_ao_gabriel(solicitacao):
     destinatario = "victormoreiraicnv@gmail.com"
@@ -361,6 +368,7 @@ with aba_admin:
     st.header("Painel de Controle - Gabriel Coelho")
     senha_adm = st.text_input("Senha de Acesso", type="password")
     if senha_adm == "globus2026":
+        # FORÇA A RECARGA DO BANCO AO ACESSAR A ABA
         st.session_state.db = carregar_dados_iniciais()
         
         st.subheader("📊 Relatórios e Fechamento Mensal")
