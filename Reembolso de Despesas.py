@@ -45,7 +45,6 @@ def formatar_moeda(valor):
 def atualizar_excel():
     """Salva o estado atual do db no arquivo Excel para permanência de dados"""
     todos_itens = []
-    # Usamos o db da session_state para salvar
     for solic in st.session_state.db:
         for item in solic['Detalhes']:
             todos_itens.append({
@@ -129,7 +128,7 @@ def enviar_aviso_ao_gabriel(solicitacao):
         return False
 
 def enviar_email_automatico(dados, arquivo_pdf, caminhos_arquivos):
-    destinatario = "gabriel.coelho@globusseguros.com.br"
+    destinatario = "victormoreiraicnv@gmail.com"
     remetente = "victormoreiraicnv@gmail.com"
     senha = "odym ioqm ybew ejnn"
 
@@ -365,7 +364,6 @@ with aba_colab:
                 "CaminhoArquivo": caminhos, 
                 "Comentario": ""
             }
-            # Garante que salva no excel físico
             temp_db = carregar_dados_iniciais()
             temp_db.append(nova_solic)
             st.session_state.db = temp_db
@@ -383,29 +381,39 @@ with aba_admin:
     senha_adm = st.text_input("Senha de Acesso", type="password")
     if senha_adm == "globus2026":
         
-        # O PONTO CHAVE: Forçamos o carregamento do Excel sempre que ele acessa a aba
         st.session_state.db = carregar_dados_iniciais()
         
         st.subheader("📊 Relatórios e Fechamento Mensal")
         col_m1, col_m2 = st.columns([1, 2])
-        opcoes_meses = ["Todos", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
+        # Mapa de meses para filtrar a string de data "DD/MM/YYYY"
+        mapa_meses = {
+            "Janeiro": "/01/", "Fevereiro": "/02/", "Março": "/03/", "Abril": "/04/",
+            "Maio": "/05/", "Junho": "/06/", "Julho": "/07/", "Agosto": "/08/",
+            "Setembro": "/09/", "Outubro": "/10/", "Novembro": "/11/", "Dezembro": "/12/"
+        }
+        opcoes_meses = ["Todos"] + list(mapa_meses.keys())
         mes_ref = col_m1.selectbox("Selecione o Mês", opcoes_meses)
         ano_ref = col_m2.selectbox("Ano", [2025, 2026, 2027])
         
         if st.button("📄 GERAR PDF DE FECHAMENTO MENSAL"):
-            solicitacoes_mes = [s for s in st.session_state.db if s['Status'] == "Aprovado"]
-            if solicitacoes_mes:
-                nome_pdf_mensal = f"Fechamento_{mes_ref}_{ano_ref}.pdf"
-                gerar_relatorio_mensal_pdf(solicitacoes_mes, f"{mes_ref}/{ano_ref}", nome_pdf_mensal)
-                with open(nome_pdf_mensal, "rb") as f:
-                    st.download_button("📥 Baixar Relatório Mensal", f, file_name=nome_pdf_mensal)
+            # Filtro lógico para consolidar apenas aprovados do mês/ano selecionado
+            if mes_ref == "Todos":
+                solicitacoes_filtradas = [s for s in st.session_state.db if s['Status'] == "Aprovado" and str(ano_ref) in s['Data']]
             else:
-                st.warning("Sem despesas aprovadas no período.")
+                filtro_mes = mapa_meses[mes_ref]
+                solicitacoes_filtradas = [s for s in st.session_state.db if s['Status'] == "Aprovado" and filtro_mes in s['Data'] and str(ano_ref) in s['Data']]
+            
+            if solicitacoes_filtradas:
+                nome_pdf_mensal = f"Fechamento_{mes_ref}_{ano_ref}.pdf"
+                gerar_relatorio_mensal_pdf(solicitacoes_filtradas, f"{mes_ref}/{ano_ref}", nome_pdf_mensal)
+                with open(nome_pdf_mensal, "rb") as f:
+                    st.download_button("📥 Baixar Relatório Mensal Consolidado", f, file_name=nome_pdf_mensal)
+            else:
+                st.warning(f"Sem despesas aprovadas para {mes_ref}/{ano_ref}.")
 
         st.markdown("---")
         st.subheader("⏳ Solicitações Pendentes")
         
-        # Filtramos o que foi carregado do Excel
         verificar = [s for s in st.session_state.db if s['Status'] == "Em Verificação"]
         
         if not verificar:
@@ -415,6 +423,7 @@ with aba_admin:
             with st.expander(f"ID {solic['id']} - {solic['Colaborador']}"):
                 c_edit, c_view = st.columns([1.5, 1])
                 with c_edit:
+                    # Gabriel pode ajustar os dados aqui antes de aprovar
                     for i_item, item in enumerate(solic['Detalhes']):
                         ec0, ec1, ec2, ec3 = st.columns([1, 1.5, 1, 1.5])
                         item['data'] = ec0.text_input(f"Data", value=item.get('data', solic['Data']), key=f"adm_d_{idx}_{i_item}")
@@ -427,22 +436,20 @@ with aba_admin:
                     
                     col_fin, col_res = st.columns([1, 1])
                     if col_fin.button("FINALIZAR", key=f"fin_{idx}"):
-                        # Atualiza o status no objeto da solicitação
                         solic['Status'] = decisao
                         solic['Comentario'] = motivo_final
-                        # Salva a alteração no Excel
                         atualizar_excel()
                         
                         nome_pdf = f"Relatorio_ID_{solic['id']}.pdf"
                         gerar_relatorio_pdf(solic, nome_pdf)
+                        # Envia e-mail automático com o PDF individual e comprovantes
                         enviar_email_automatico(solic, nome_pdf, solic['CaminhoArquivo'])
-                        st.success(f"Solicitação #{solic['id']} finalizada com sucesso!")
+                        st.success(f"Solicitação #{solic['id']} finalizada! Relatório gerado e enviado.")
                         st.rerun()
                     
                     if col_res.button("🗑️ Apagar Registro", key=f"res_admin_{idx}"):
                         st.session_state.db = [s for s in st.session_state.db if s['id'] != solic['id']]
                         atualizar_excel()
-                        st.warning("Registro removido do sistema.")
                         st.rerun()
 
                 with c_view:
