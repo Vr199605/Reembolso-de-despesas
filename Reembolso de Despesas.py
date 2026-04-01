@@ -215,7 +215,8 @@ aba_colab, aba_admin = st.tabs(["🚀 Solicitar Reembolso", "🔑 Verificação 
 with aba_colab:
     st.header("Nova Solicitação")
     nome = st.text_input("Nome Completo")
-    data_solic = st.date_input("Data da Despesa", format="DD/MM/YYYY")
+    # Alterado para texto para permitir múltiplas datas ou períodos
+    data_solic = st.text_input("Data ou Período das Despesas", placeholder="Ex: 10/03 a 15/03/2026")
     st.markdown("---")
     for i, item in enumerate(st.session_state.items_reembolso):
         col1, col2, col3, col4 = st.columns([2, 1.5, 2, 0.5])
@@ -228,7 +229,9 @@ with aba_colab:
         else:
             item['valor'] = col2.number_input(f"Valor R$", min_value=0.0, step=0.01, format="%.2f", value=None, key=f"val_{i}")
             if item['valor'] and item['categoria'] in LIMITES and item['valor'] > LIMITES[item['categoria']]:
-                col2.warning(f"O limite para {item['categoria']} é de R$ {LIMITES[item['categoria']]},00. O reembolso será processado até este teto; valores excedentes não serão contemplados.")
+                # Correção do erro visual: removido caracteres que disparam LaTeX
+                msg_limite = f"Atenção: O limite para {item['categoria']} é de R$ {LIMITES[item['categoria']]},00. O valor excedente não será reembolsado."
+                col2.warning(msg_limite)
         item['motivo'] = col3.text_input(f"Motivo / Justificativa", key=f"mot_{i}")
         if col4.button("🗑️", key=f"del_{i}"):
             st.session_state.items_reembolso.pop(i)
@@ -242,7 +245,7 @@ with aba_colab:
             path = salvar_arquivo_local(arquivo)
             detalhes_limpos = [it.copy() for it in st.session_state.items_reembolso]
             nova_solic = {
-                "id": len(st.session_state.db)+1, "Colaborador": nome, "Data": data_solic.strftime("%d/%m/%Y"), 
+                "id": len(st.session_state.db)+1, "Colaborador": nome, "Data": data_solic, 
                 "Detalhes": detalhes_limpos, "Status": "Em Verificação", "CaminhoArquivo": path
             }
             st.session_state.db.append(nova_solic)
@@ -265,7 +268,7 @@ with aba_admin:
         
         # Mapeamento para filtro
         meses_map = {"Janeiro":"01", "Fevereiro":"02", "Março":"03", "Abril":"04", "Maio":"05", "Junho":"06", "Julho":"07", "Agosto":"08", "Setembro":"09", "Outubro":"10", "Novembro":"11", "Dezembro":"12"}
-        filtro_mes_ano = f"{meses_map[mes_ref]}/{ano_ref}"
+        filtro_mes_ano = f"/{meses_map[mes_ref]}/{ano_ref}"
         
         # Filtrar aprovações do mês selecionado
         solicitacoes_mes = [s for s in st.session_state.db if filtro_mes_ano in s['Data'] and s['Status'] == "Aprovado"]
